@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /admin/*
+Disallow: /account
+Disallow: /account/*
+Disallow: /checkout
+Disallow: /cart
+Disallow: /wishlist
+Disallow: /payment-failure
+Disallow: /order-confirmation/*
+
+Sitemap: https://aura-storefront.netlify.app/sitemap.xml

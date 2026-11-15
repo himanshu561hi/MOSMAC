@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Support dark autofill in Chrome/Safari */
+  .dark-autofill input:-webkit-autofill,
+  .dark-autofill input:-webkit-autofill:hover,
+  .dark-autofill input:-webkit-autofill:focus,
+  .dark-autofill input:-webkit-autofill:active,
+  input.dark-autofill:-webkit-autofill,
+  input.dark-autofill:-webkit-autofill:hover,
+  input.dark-autofill:-webkit-autofill:focus,
+  input.dark-autofill:-webkit-autofill:active,
+  .bg-slate-900 input:-webkit-autofill,
+  .bg-slate-950 input:-webkit-autofill {
+    -webkit-box-shadow: 0 0 0 1000px #020617 inset !important;
+    -webkit-text-fill-color: #ffffff !important;
+    caret-color: #ffffff !important;
+    transition: background-color 5000s ease-in-out 0s;
+  }
+}
+
