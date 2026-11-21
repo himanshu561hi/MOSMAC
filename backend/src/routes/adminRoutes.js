@@ -17,18 +17,28 @@ import adminAuditController from '../controllers/adminAuditController.js';
 import adminSetupController from '../controllers/adminSetupController.js';
 import adminImportExportController from '../controllers/adminImportExportController.js';
 
-// Multer memory storage configuration for bulk imports
+// Multer memory storage configuration for bulk imports (Excel + optional Images ZIP)
 const bulkUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB limit
+  limits: { fileSize: 300 * 1024 * 1024 }, // up to 300 MB limit
   fileFilter: (req, file, cb) => {
-    if (
+    const isExcel =
       file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-      file.originalname.toLowerCase().endsWith('.xlsx')
-    ) {
+      file.originalname.toLowerCase().endsWith('.xlsx');
+    const isZip =
+      file.mimetype === 'application/zip' ||
+      file.mimetype === 'application/x-zip-compressed' ||
+      file.mimetype === 'application/octet-stream' ||
+      file.originalname.toLowerCase().endsWith('.zip');
+
+    if (file.fieldname === 'file' && isExcel) {
+      cb(null, true);
+    } else if (file.fieldname === 'imagesZip' && isZip) {
+      cb(null, true);
+    } else if (isExcel || isZip) {
       cb(null, true);
     } else {
-      cb(new Error('Only .xlsx Excel files are permitted for bulk import'), false);
+      cb(new Error(`Unsupported file type for field '${file.fieldname}': only .xlsx and .zip files are allowed`), false);
     }
   }
 });
@@ -287,7 +297,10 @@ adminRoutes.get(
 adminRoutes.post(
   '/bulk/:module/validate',
   authorize(ROLES.SUPER_ADMIN, ROLES.STORE_MANAGER),
-  bulkUpload.single('file'),
+  bulkUpload.fields([
+    { name: 'file', maxCount: 1 },
+    { name: 'imagesZip', maxCount: 1 }
+  ]),
   adminImportExportController.validateUpload
 );
 
@@ -299,6 +312,16 @@ adminRoutes.post(
   '/bulk/:module/execute',
   authorize(ROLES.SUPER_ADMIN, ROLES.STORE_MANAGER),
   adminImportExportController.executeImport
+);
+
+/**
+ * GET /api/v1/admin/bulk/job/:jobId/status
+ * Get real-time status and progress of an import job
+ */
+adminRoutes.get(
+  '/bulk/job/:jobId/status',
+  authorize(ROLES.SUPER_ADMIN, ROLES.STORE_MANAGER),
+  adminImportExportController.getJobStatus
 );
 
 /**

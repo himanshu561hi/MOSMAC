@@ -225,6 +225,10 @@ export const excelGenerator = {
     summarySheet.addRow({ key: 'Created Count', value: job.createdCount });
     summarySheet.addRow({ key: 'Updated Count', value: job.updatedCount });
     summarySheet.addRow({ key: 'Skipped Count', value: job.skippedCount });
+    summarySheet.addRow({ key: 'Images ZIP Included', value: job.hasImagesZip ? 'Yes' : 'No' });
+    summarySheet.addRow({ key: 'Images Found', value: job.imagesFound || 0 });
+    summarySheet.addRow({ key: 'Images Uploaded', value: job.imagesUploaded || 0 });
+    summarySheet.addRow({ key: 'Images Skipped (Duplicates)', value: job.imagesSkipped || 0 });
     summarySheet.addRow({ key: 'Imported By', value: job.importedByEmail });
     summarySheet.addRow({ key: 'Created At', value: job.createdAt ? job.createdAt.toISOString() : '' });
     summarySheet.addRow({ key: 'Completed At', value: job.completedAt ? job.completedAt.toISOString() : '' });
@@ -237,7 +241,7 @@ export const excelGenerator = {
     errorSheet.columns = [
       { header: 'Excel Row #', key: 'row', width: 14 },
       { header: 'Column', key: 'column', width: 22 },
-      { header: 'Offending Value', key: 'value', width: 25 },
+      { header: 'Offending Value / SKU', key: 'value', width: 25 },
       { header: 'Error Reason', key: 'reason', width: 45 },
       { header: 'Suggested Fix', key: 'suggestion', width: 45 }
     ];
@@ -258,6 +262,33 @@ export const excelGenerator = {
           value: sanitizeForExport(err.value),
           reason: sanitizeForExport(err.reason),
           suggestion: sanitizeForExport(err.suggestion)
+        });
+      });
+    }
+
+    // Sheet 3: Image Warnings (if any)
+    if (job.imageWarnings && job.imageWarnings.length > 0) {
+      const warnSheet = workbook.addWorksheet('Image Warnings', {
+        views: [{ state: 'frozen', ySplit: 1, showGridLines: true }]
+      });
+
+      warnSheet.columns = [
+        { header: '#', key: 'index', width: 8 },
+        { header: 'Warning Message', key: 'warning', width: 80 }
+      ];
+
+      const warnHeader = warnSheet.getRow(1);
+      warnHeader.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFD97706' } // Amber-600
+      };
+      warnHeader.font = HEADER_FONT;
+
+      job.imageWarnings.forEach((warn, idx) => {
+        warnSheet.addRow({
+          index: idx + 1,
+          warning: sanitizeForExport(warn)
         });
       });
     }

@@ -88,10 +88,15 @@ export const MODULE_DEFINITIONS = {
       if (!slug) {
         errors.push({ column: 'Slug', value: slug, reason: 'Slug is required', suggestion: 'Provide lowercased URL slug' });
       }
-      if (isNaN(basePrice) || basePrice < 0) {
+      if (row.basePrice === undefined || row.basePrice === null || String(row.basePrice).trim() === '') {
+        errors.push({ column: 'Selling Price (INR)', value: '', reason: 'Selling Price is required (blank prices are not allowed)', suggestion: 'Provide selling price in whole INR' });
+      } else if (isNaN(basePrice) || basePrice < 0) {
         errors.push({ column: 'Selling Price (INR)', value: row.basePrice, reason: 'Price must be a valid non-negative number', suggestion: 'e.g. 1999' });
       }
-      if (isNaN(baseMrp) || baseMrp < 0) {
+
+      if (row.baseMrp === undefined || row.baseMrp === null || String(row.baseMrp).trim() === '') {
+        errors.push({ column: 'MRP (INR)', value: '', reason: 'MRP is required (blank prices are not allowed)', suggestion: 'Provide MRP in whole INR' });
+      } else if (isNaN(baseMrp) || baseMrp < 0) {
         errors.push({ column: 'MRP (INR)', value: row.baseMrp, reason: 'MRP must be a valid non-negative number', suggestion: 'e.g. 2999' });
       } else if (!isNaN(basePrice) && basePrice > baseMrp) {
         errors.push({ column: 'Selling Price (INR)', value: String(basePrice), reason: 'Selling price cannot exceed MRP', suggestion: 'Ensure Selling Price <= MRP' });
@@ -157,21 +162,27 @@ export const MODULE_DEFINITIONS = {
         if (mode === 'create_only') {
           return { action: 'skipped', reason: 'Record already exists and import mode is create_only' };
         }
+        const updatePayload = {
+          title: data.title,
+          description: data.description,
+          categoryId: data.categoryId,
+          brandId: data.brandId,
+          basePrice: pricePaise,
+          baseMrp: mrpPaise,
+          status: data.status,
+          isFeatured: data.isFeatured,
+          'seo.metaTitle': data.metaTitle,
+          'seo.metaDescription': data.metaDescription
+        };
+
+        if (Array.isArray(data.images) && data.images.length > 0) {
+          updatePayload.images = data.images;
+        }
+
         await Product.findOneAndUpdate(
           { 'variants.sku': data.sku },
           {
-            $set: {
-              title: data.title,
-              description: data.description,
-              categoryId: data.categoryId,
-              brandId: data.brandId,
-              basePrice: pricePaise,
-              baseMrp: mrpPaise,
-              status: data.status,
-              isFeatured: data.isFeatured,
-              'seo.metaTitle': data.metaTitle,
-              'seo.metaDescription': data.metaDescription
-            }
+            $set: updatePayload
           }
         );
         return { action: 'updated', sku: data.sku };
@@ -285,8 +296,11 @@ export const MODULE_DEFINITIONS = {
       if (parentSlug) {
         if (context.categoryMap && context.categoryMap[parentSlug]) {
           parentId = context.categoryMap[parentSlug]._id;
+        } else if (context.inSheetSlugs && context.inSheetSlugs.has(parentSlug)) {
+          // Parent is defined within the same spreadsheet!
+          parentId = null; // Will be resolved dynamically during topological execution
         } else {
-          errors.push({ column: 'Parent Slug', value: parentSlug, reason: `Parent category '${parentSlug}' not found`, suggestion: 'Ensure parent category exists' });
+          errors.push({ column: 'Parent Slug', value: parentSlug, reason: `Parent category '${parentSlug}' not found in database or file`, suggestion: 'Ensure parent category exists or is defined in this sheet' });
         }
       }
 
@@ -301,6 +315,7 @@ export const MODULE_DEFINITIONS = {
           slug,
           description: String(row.description || '').trim(),
           parentId,
+          parentSlug,
           imageUrl: String(row.imageUrl || '').trim(),
           displayOrder: parseInt(row.displayOrder, 10) || 0,
           isActive: String(row.isActive).toLowerCase() !== 'false',
@@ -309,36 +324,50 @@ export const MODULE_DEFINITIONS = {
         }
       };
     },
-    async executeRow({ data, isExisting, mode }) {
+    async executeRow({ data, isExisting, mode, context }) {
+      // Dynamically resolve parentId from in-flight created categories if parent was in the same file
+      let parentId = data.parentId;
+      if (!parentId && data.parentSlug) {
+        if (context?.createdCategories && context.createdCategories.has(data.parentSlug)) {
+          parentId = context.createdCategories.get(data.parentSlug);
+        } else if (context?.categoryMap && context.categoryMap[data.parentSlug]) {
+          parentId = context.categoryMap[data.parentSlug]._id;
+        }
+      }
+
       if (isExisting) {
         if (mode === 'create_only') {
           return { action: 'skipped', reason: 'Record already exists and import mode is create_only' };
         }
-        await Category.findOneAndUpdate(
+        const updated = await Category.findOneAndUpdate(
           { slug: data.slug },
           {
             $set: {
               name: data.name,
               description: data.description,
-              parentId: data.parentId,
+              parentId: parentId || null,
               imageUrl: data.imageUrl,
               displayOrder: data.displayOrder,
               isActive: data.isActive,
               'seo.metaTitle': data.metaTitle,
               'seo.metaDescription': data.metaDescription
             }
-          }
+          },
+          { new: true }
         );
-        return { action: 'updated', slug: data.slug };
+        if (context?.createdCategories && updated) {
+          context.createdCategories.set(data.slug, updated._id);
+        }
+        return { action: 'updated', slug: data.slug, id: updated?._id };
       } else {
         if (mode === 'update_existing') {
           return { action: 'skipped', reason: 'Record does not exist and import mode is update_existing' };
         }
-        await Category.create({
+        const created = await Category.create({
           name: data.name,
           slug: data.slug,
           description: data.description,
-          parentId: data.parentId,
+          parentId: parentId || null,
           imageUrl: data.imageUrl,
           displayOrder: data.displayOrder,
           isActive: data.isActive,
@@ -347,7 +376,10 @@ export const MODULE_DEFINITIONS = {
             metaDescription: data.metaDescription
           }
         });
-        return { action: 'created', slug: data.slug };
+        if (context?.createdCategories && created) {
+          context.createdCategories.set(data.slug, created._id);
+        }
+        return { action: 'created', slug: data.slug, id: created._id };
       }
     },
     async fetchExportData() {

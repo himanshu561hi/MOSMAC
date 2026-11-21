@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   FileSpreadsheet,
   UploadCloud,
@@ -10,7 +10,10 @@ import {
   RefreshCw,
   X,
   FileCheck,
-  HelpCircle
+  FolderArchive,
+  Image as ImageIcon,
+  Check,
+  Info
 } from 'lucide-react';
 import { bulkImportService } from '../../services/bulkImportService';
 
@@ -23,28 +26,44 @@ export const BulkImportModal = ({
 }) => {
   const [step, setStep] = useState(1); // 1: Upload, 2: Preview & Mode, 3: Completed
   const [file, setFile] = useState(null);
-  const [isDragging, setIsDragging] = useState(false);
+  const [imagesZip, setImagesZip] = useState(null);
+  const [isDraggingExcel, setIsDraggingExcel] = useState(false);
+  const [isDraggingZip, setIsDraggingZip] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Validation results
+  // Validation results & options
   const [validationData, setValidationData] = useState(null);
   const [importMode, setImportMode] = useState('create_only');
+  const [replaceImages, setReplaceImages] = useState(false);
 
-  // Execution results
+  // Execution results & progress
   const [executionResult, setExecutionResult] = useState(null);
+  const [progress, setProgress] = useState({ current: 0, total: 0, text: '' });
 
   const fileInputRef = useRef(null);
+  const zipInputRef = useRef(null);
+  const pollTimerRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+    };
+  }, []);
 
   if (!isOpen) return null;
 
   const handleReset = () => {
+    if (pollTimerRef.current) clearInterval(pollTimerRef.current);
     setStep(1);
     setFile(null);
+    setImagesZip(null);
     setError(null);
     setValidationData(null);
     setImportMode('create_only');
+    setReplaceImages(false);
     setExecutionResult(null);
+    setProgress({ current: 0, total: 0, text: '' });
   };
 
   const handleClose = () => {
@@ -52,9 +71,17 @@ export const BulkImportModal = ({
     onClose();
   };
 
-  const handleFileDrop = (e) => {
+  const formatFileSize = (bytes) => {
+    if (!bytes) return '0 KB';
+    if (bytes >= 1024 * 1024) {
+      return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    }
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  };
+
+  const handleExcelDrop = (e) => {
     e.preventDefault();
-    setIsDragging(false);
+    setIsDraggingExcel(false);
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const selected = e.dataTransfer.files[0];
       if (selected.name.toLowerCase().endsWith('.xlsx')) {
@@ -66,7 +93,7 @@ export const BulkImportModal = ({
     }
   };
 
-  const handleFileSelect = (e) => {
+  const handleExcelSelect = (e) => {
     if (e.target.files && e.target.files[0]) {
       const selected = e.target.files[0];
       if (selected.name.toLowerCase().endsWith('.xlsx')) {
@@ -74,6 +101,32 @@ export const BulkImportModal = ({
         setError(null);
       } else {
         setError('Please upload a valid Excel spreadsheet (.xlsx).');
+      }
+    }
+  };
+
+  const handleZipDrop = (e) => {
+    e.preventDefault();
+    setIsDraggingZip(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const selected = e.dataTransfer.files[0];
+      if (selected.name.toLowerCase().endsWith('.zip')) {
+        setImagesZip(selected);
+        setError(null);
+      } else {
+        setError('Please upload a valid Images ZIP archive (.zip).');
+      }
+    }
+  };
+
+  const handleZipSelect = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      const selected = e.target.files[0];
+      if (selected.name.toLowerCase().endsWith('.zip')) {
+        setImagesZip(selected);
+        setError(null);
+      } else {
+        setError('Please upload a valid Images ZIP archive (.zip).');
       }
     }
   };
@@ -98,7 +151,11 @@ export const BulkImportModal = ({
     try {
       setLoading(true);
       setError(null);
-      const res = await bulkImportService.validateUpload(module, file);
+      const validateArgs = [module, file];
+      if (imagesZip) {
+        validateArgs.push(imagesZip);
+      }
+      const res = await bulkImportService.validateUpload(...validateArgs);
       setValidationData(res);
       setStep(2);
     } catch (err) {
@@ -114,11 +171,38 @@ export const BulkImportModal = ({
     try {
       setLoading(true);
       setError(null);
-      const res = await bulkImportService.executeImport(module, validationData.jobId, importMode);
+
+      // Start status polling if images or substantial rows
+      if (validationData.hasImagesZip || validationData.totalRows > 15) {
+        pollTimerRef.current = setInterval(async () => {
+          try {
+            const status = await bulkImportService.getJobStatus(validationData.jobId);
+            if (status) {
+              setProgress({
+                current: status.progressCurrent || 0,
+                total: status.progressTotal || validationData.totalRows,
+                text: status.progressStep || `Processing (${status.progressCurrent}/${status.progressTotal})...`
+              });
+            }
+          } catch {
+            // ignore polling network tick errors
+          }
+        }, 1000);
+      }
+
+      const executeArgs = [module, validationData.jobId, importMode];
+      if (replaceImages) {
+        executeArgs.push(true);
+      }
+
+      const res = await bulkImportService.executeImport(...executeArgs);
+
+      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
       setExecutionResult(res);
       setStep(3);
       if (onSuccess) onSuccess();
     } catch (err) {
+      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
       setError(err.response?.data?.message || err.message || 'Import execution failed.');
     } finally {
       setLoading(false);
@@ -130,10 +214,12 @@ export const BulkImportModal = ({
     if (!jobId) return;
     try {
       await bulkImportService.downloadReport(jobId);
-    } catch (err) {
+    } catch {
       setError('Failed to download execution report');
     }
   };
+
+  const isProductModule = module === 'products';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
@@ -226,54 +312,120 @@ export const BulkImportModal = ({
                 </div>
               </div>
 
-              {/* Upload Dropzone */}
+              {/* Upload Dropzones */}
               <div>
                 <h3 className="text-sm font-medium text-white mb-2 flex items-center gap-2">
                   <UploadCloud className="w-4 h-4 text-emerald-400" />
-                  Step 2: Upload Completed Spreadsheet
+                  Step 2: Upload Spreadsheet {isProductModule ? '& Images ZIP' : ''}
                 </h3>
 
-                <div
-                  onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                  onDragLeave={() => setIsDragging(false)}
-                  onDrop={handleFileDrop}
-                  onClick={() => fileInputRef.current?.click()}
-                  className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition ${
-                    isDragging
-                      ? 'border-emerald-500 bg-emerald-500/5'
-                      : file
-                      ? 'border-emerald-500/40 bg-emerald-500/5'
-                      : 'border-slate-800 hover:border-slate-700 bg-slate-950/40'
-                  }`}
-                >
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleFileSelect}
-                    accept=".xlsx"
-                    className="hidden"
-                  />
+                <div className={`grid gap-4 ${isProductModule ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>
+                  
+                  {/* Excel Dropzone */}
+                  <div
+                    onDragOver={(e) => { e.preventDefault(); setIsDraggingExcel(true); }}
+                    onDragLeave={() => setIsDraggingExcel(false)}
+                    onDrop={handleExcelDrop}
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition ${
+                      isDraggingExcel
+                        ? 'border-emerald-500 bg-emerald-500/5'
+                        : file
+                        ? 'border-emerald-500/40 bg-emerald-500/5'
+                        : 'border-slate-800 hover:border-slate-700 bg-slate-950/40'
+                    }`}
+                  >
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleExcelSelect}
+                      accept=".xlsx"
+                      className="hidden"
+                    />
 
-                  {file ? (
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="p-3 bg-emerald-500/20 text-emerald-400 rounded-full">
-                        <FileCheck className="w-8 h-8" />
+                    {file ? (
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="p-3 bg-emerald-500/20 text-emerald-400 rounded-full">
+                          <FileCheck className="w-7 h-7" />
+                        </div>
+                        <p className="text-sm font-medium text-white line-clamp-1">{file.name}</p>
+                        <p className="text-xs text-slate-400">{formatFileSize(file.size)} — Ready for validation</p>
+                        <span className="text-xs text-emerald-400 hover:underline mt-1">Click to replace Excel</span>
                       </div>
-                      <p className="text-sm font-medium text-white">{file.name}</p>
-                      <p className="text-xs text-slate-400">{(file.size / 1024).toFixed(1)} KB — Ready for validation</p>
-                      <span className="text-xs text-emerald-400 hover:underline mt-1">Click to replace file</span>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="p-3 bg-slate-800/80 text-slate-400 rounded-full">
-                        <UploadCloud className="w-8 h-8" />
+                    ) : (
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="p-3 bg-slate-800/80 text-slate-400 rounded-full">
+                          <UploadCloud className="w-7 h-7" />
+                        </div>
+                        <p className="text-sm font-medium text-slate-300">
+                          Excel Spreadsheet <span className="text-rose-400">*</span>
+                        </p>
+                        <p className="text-xs text-slate-400">Drag & drop your <span className="text-emerald-400 font-mono">.xlsx</span> file here, or browse</p>
+                        <p className="text-[11px] text-slate-500">Required: Sheet "Data" columns</p>
                       </div>
-                      <p className="text-sm font-medium text-slate-300">
-                        Drag and drop your <span className="text-emerald-400">.xlsx</span> file here, or browse
-                      </p>
-                      <p className="text-xs text-slate-500">Supports up to 5,000 rows per file (max 10MB)</p>
+                    )}
+                  </div>
+
+                  {/* Images ZIP Dropzone (Only for Products module) */}
+                  {isProductModule && (
+                    <div
+                      onDragOver={(e) => { e.preventDefault(); setIsDraggingZip(true); }}
+                      onDragLeave={() => setIsDraggingZip(false)}
+                      onDrop={handleZipDrop}
+                      onClick={() => zipInputRef.current?.click()}
+                      className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition relative ${
+                        isDraggingZip
+                          ? 'border-teal-500 bg-teal-500/5'
+                          : imagesZip
+                          ? 'border-teal-500/40 bg-teal-500/5'
+                          : 'border-slate-800 hover:border-slate-700 bg-slate-950/40'
+                      }`}
+                    >
+                      <input
+                        type="file"
+                        ref={zipInputRef}
+                        onChange={handleZipSelect}
+                        accept=".zip"
+                        className="hidden"
+                      />
+
+                      {imagesZip ? (
+                        <div className="flex flex-col items-center gap-2">
+                          <div className="p-3 bg-teal-500/20 text-teal-400 rounded-full">
+                            <FolderArchive className="w-7 h-7" />
+                          </div>
+                          <p className="text-sm font-medium text-white line-clamp-1">{imagesZip.name}</p>
+                          <p className="text-xs text-slate-400">{formatFileSize(imagesZip.size)} — Attached for matching</p>
+                          <div className="flex items-center gap-3 mt-1">
+                            <span className="text-xs text-teal-400 hover:underline">Replace ZIP</span>
+                            <span className="text-slate-600">•</span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setImagesZip(null);
+                              }}
+                              className="text-xs text-rose-400 hover:underline"
+                            >
+                              Remove ZIP
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center gap-2">
+                          <div className="p-3 bg-slate-800/80 text-teal-400 rounded-full">
+                            <FolderArchive className="w-7 h-7" />
+                          </div>
+                          <p className="text-sm font-medium text-slate-300">
+                            Images ZIP <span className="text-xs text-slate-500 font-normal">(Optional)</span>
+                          </p>
+                          <p className="text-xs text-slate-400">Drag & drop your <span className="text-teal-400 font-mono">.zip</span> file here, or browse</p>
+                          <p className="text-[11px] text-slate-500">Structure: PRODUCT_IMAGES/&lt;SKU&gt;/main.jpg</p>
+                        </div>
+                      )}
                     </div>
                   )}
+
                 </div>
               </div>
             </div>
@@ -283,7 +435,7 @@ export const BulkImportModal = ({
           {step === 2 && validationData && (
             <div className="space-y-6">
               
-              {/* Metric Chips */}
+              {/* Primary Metric Chips */}
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                 <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-lg text-center">
                   <p className="text-xs text-slate-400">Total Rows</p>
@@ -307,8 +459,64 @@ export const BulkImportModal = ({
                 </div>
               </div>
 
-              {/* Import Mode Selector */}
-              <div className="p-4 bg-slate-950/60 border border-slate-800 rounded-xl space-y-3">
+              {/* Secondary Images ZIP Metric Chips (If Images ZIP is attached) */}
+              {validationData.hasImagesZip && (
+                <div className="p-4 bg-teal-950/20 border border-teal-500/30 rounded-xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-semibold text-teal-300 uppercase tracking-wider flex items-center gap-2">
+                      <ImageIcon className="w-4 h-4 text-teal-400" />
+                      Images ZIP Analysis ({validationData.imagesFound} Images Found)
+                    </h4>
+                    <span className="text-[11px] text-teal-400/80 font-mono">Matched by SKU</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    <div className="p-2.5 bg-slate-900/80 border border-teal-500/20 rounded-lg text-center">
+                      <p className="text-[11px] text-slate-400">SKU Folders Found</p>
+                      <p className="text-base font-bold text-teal-300 mt-0.5">{validationData.skuFoldersFound || 0}</p>
+                    </div>
+                    <div className="p-2.5 bg-slate-900/80 border border-teal-500/20 rounded-lg text-center">
+                      <p className="text-[11px] text-slate-400">Products with Images</p>
+                      <p className="text-base font-bold text-emerald-400 mt-0.5">{validationData.productsWithImages || 0}</p>
+                    </div>
+                    <div className="p-2.5 bg-slate-900/80 border border-teal-500/20 rounded-lg text-center">
+                      <p className="text-[11px] text-slate-400">Excel SKUs w/o Images</p>
+                      <p className="text-base font-bold text-amber-400 mt-0.5">{validationData.excelSkusWithoutImages || 0}</p>
+                    </div>
+                    <div className="p-2.5 bg-slate-900/80 border border-teal-500/20 rounded-lg text-center">
+                      <p className="text-[11px] text-slate-400">ZIP Folders w/o Product</p>
+                      <p className="text-base font-bold text-purple-400 mt-0.5">{validationData.orphanFoldersCount || 0}</p>
+                    </div>
+                    <div className="p-2.5 bg-slate-900/80 border border-teal-500/20 rounded-lg text-center">
+                      <p className="text-[11px] text-slate-400">Images Found</p>
+                      <p className="text-base font-bold text-white mt-0.5">{validationData.imagesFound || 0}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Image Warnings Box (If any non-blocking warnings) */}
+              {validationData.imageWarnings && validationData.imageWarnings.length > 0 && (
+                <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl space-y-2">
+                  <h4 className="text-xs font-semibold text-amber-300 flex items-center gap-1.5 uppercase tracking-wider">
+                    <AlertTriangle className="w-4 h-4 text-amber-400" />
+                    Image Warnings & Advisories ({validationData.imageWarnings.length})
+                  </h4>
+                  <ul className="text-xs text-amber-200/90 space-y-1 list-disc pl-5 max-h-32 overflow-y-auto">
+                    {validationData.imageWarnings.slice(0, 10).map((warn, i) => (
+                      <li key={i}>{warn}</li>
+                    ))}
+                    {validationData.imageWarnings.length > 10 && (
+                      <li className="text-slate-400 list-none">
+                        ...and {validationData.imageWarnings.length - 10} more warnings (included in final report).
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              )}
+
+              {/* Import Mode Selector & Replace Images Option */}
+              <div className="p-4 bg-slate-950/60 border border-slate-800 rounded-xl space-y-4">
                 <h4 className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
                   Select Import Mode
                 </h4>
@@ -383,6 +591,26 @@ export const BulkImportModal = ({
                     </p>
                   </label>
                 </div>
+
+                {/* Replace Existing Images Checkbox (for products with images ZIP) */}
+                {isProductModule && validationData.hasImagesZip && (
+                  <div className="pt-2 border-t border-slate-800">
+                    <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={replaceImages}
+                        onChange={(e) => setReplaceImages(e.target.checked)}
+                        className="mt-0.5 rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
+                      />
+                      <div>
+                        <span className="text-xs font-semibold text-white">Replace existing images on update</span>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          When unchecked (recommended), existing product images are retained and only new images (by content hash) are added. When checked, the product gallery is completely replaced by the ZIP images.
+                        </p>
+                      </div>
+                    </label>
+                  </div>
+                )}
               </div>
 
               {/* Validation Errors Table (if any) */}
@@ -408,7 +636,9 @@ export const BulkImportModal = ({
                       <tbody className="divide-y divide-rose-500/10 text-slate-300">
                         {validationData.errors.slice(0, 15).map((err, idx) => (
                           <tr key={idx} className="hover:bg-rose-500/10">
-                            <td className="py-1.5 px-3 font-mono text-rose-400">{err.row}</td>
+                            <td className="py-1.5 px-3 font-mono text-rose-400">
+                              {err.row === 0 ? 'All' : err.row}
+                            </td>
                             <td className="py-1.5 px-3 font-medium text-white">{err.column || 'General'}</td>
                             <td className="py-1.5 px-3 text-rose-300">{err.reason}</td>
                             <td className="py-1.5 px-3 text-slate-400">{err.suggestion || '—'}</td>
@@ -433,6 +663,9 @@ export const BulkImportModal = ({
                           <th className="py-2 px-3 w-16">Status</th>
                           <th className="py-2 px-3 w-16">Row #</th>
                           <th className="py-2 px-3">Title / Key</th>
+                          {validationData.hasImagesZip && (
+                            <th className="py-2 px-3 w-40">Images</th>
+                          )}
                           <th className="py-2 px-3">Details</th>
                         </tr>
                       </thead>
@@ -454,6 +687,11 @@ export const BulkImportModal = ({
                             <td className="py-2 px-3 font-medium text-white">
                               {r.title || r.name || r.sku || r.code || r.question || 'Record'}
                             </td>
+                            {validationData.hasImagesZip && (
+                              <td className="py-2 px-3 text-slate-300 font-mono text-[11px]">
+                                {r._imagesSummary || (r._imagesCount !== undefined ? `${r._imagesCount} images` : '—')}
+                              </td>
+                            )}
                             <td className="py-2 px-3 text-slate-400 truncate max-w-xs">
                               {r.description || r.category || r.reason || r.answer || ''}
                             </td>
@@ -467,9 +705,9 @@ export const BulkImportModal = ({
             </div>
           )}
 
-          {/* STEP 3: EXECUTION RESULTS */}
+          {/* STEP 3: EXECUTION RESULTS & PROGRESS */}
           {step === 3 && executionResult && (
-            <div className="text-center py-8 space-y-6">
+            <div className="text-center py-6 space-y-6">
               <div className="w-16 h-16 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full flex items-center justify-center mx-auto">
                 <CheckCircle2 className="w-8 h-8" />
               </div>
@@ -477,13 +715,14 @@ export const BulkImportModal = ({
               <div>
                 <h3 className="text-xl font-semibold text-white">Import Execution Completed</h3>
                 <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
-                  {executionResult.summary || 'Records have been processed in accordance with your chosen import mode.'}
+                  {executionResult.summary || 'Records and images have been processed in accordance with your chosen import mode.'}
                 </p>
               </div>
 
+              {/* Summary Cards */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 max-w-lg mx-auto">
                 <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-lg">
-                  <p className="text-xs text-slate-400">Total</p>
+                  <p className="text-xs text-slate-400">Total Rows</p>
                   <p className="text-lg font-bold text-white mt-1">{executionResult.totalRows}</p>
                 </div>
                 <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
@@ -500,6 +739,20 @@ export const BulkImportModal = ({
                 </div>
               </div>
 
+              {/* Images Execution Metrics (If images were handled) */}
+              {(executionResult.imagesUploaded > 0 || executionResult.imagesSkipped > 0) && (
+                <div className="grid grid-cols-2 gap-3 max-w-md mx-auto pt-1">
+                  <div className="p-3 bg-teal-500/10 border border-teal-500/20 rounded-lg">
+                    <p className="text-xs text-teal-400">Images Uploaded</p>
+                    <p className="text-lg font-bold text-teal-300 mt-1">{executionResult.imagesUploaded}</p>
+                  </div>
+                  <div className="p-3 bg-slate-800/40 border border-slate-700/50 rounded-lg">
+                    <p className="text-xs text-slate-400">Duplicates Skipped</p>
+                    <p className="text-lg font-bold text-slate-300 mt-1">{executionResult.imagesSkipped}</p>
+                  </div>
+                </div>
+              )}
+
               <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
                 <button
                   type="button"
@@ -510,6 +763,24 @@ export const BulkImportModal = ({
                   Download Execution Report (.xlsx)
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* LOADING & PROGRESS OVERLAY DURING EXECUTION */}
+          {loading && step === 2 && (
+            <div className="p-6 bg-slate-950/80 border border-slate-800 rounded-xl space-y-3 text-center">
+              <RefreshCw className="w-6 h-6 animate-spin text-emerald-400 mx-auto" />
+              <p className="text-xs font-medium text-white">
+                {progress.text || 'Importing records & uploading images...'}
+              </p>
+              {progress.total > 0 && (
+                <div className="w-full max-w-md mx-auto bg-slate-800 rounded-full h-2 overflow-hidden">
+                  <div
+                    className="bg-emerald-500 h-2 transition-all duration-300"
+                    style={{ width: `${Math.round((progress.current / progress.total) * 100)}%` }}
+                  />
+                </div>
+              )}
             </div>
           )}
 

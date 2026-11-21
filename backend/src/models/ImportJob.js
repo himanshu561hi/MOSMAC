@@ -84,6 +84,70 @@ const importJobSchema = new mongoose.Schema(
       type: Number,
       default: 0
     },
+    hasImagesZip: {
+      type: Boolean,
+      default: false
+    },
+    imagesZipFilename: {
+      type: String,
+      default: ''
+    },
+    imagesZipStoragePath: {
+      type: String,
+      default: ''
+    },
+    imagesFound: {
+      type: Number,
+      default: 0
+    },
+    skuFoldersFound: {
+      type: Number,
+      default: 0
+    },
+    productsWithImages: {
+      type: Number,
+      default: 0
+    },
+    excelSkusWithoutImages: {
+      type: Number,
+      default: 0
+    },
+    orphanFoldersCount: {
+      type: Number,
+      default: 0
+    },
+    orphanFolders: {
+      type: [String],
+      default: []
+    },
+    imagesUploaded: {
+      type: Number,
+      default: 0
+    },
+    imagesSkipped: {
+      type: Number,
+      default: 0
+    },
+    imageWarnings: {
+      type: [String],
+      default: []
+    },
+    replaceImages: {
+      type: Boolean,
+      default: false
+    },
+    progressCurrent: {
+      type: Number,
+      default: 0
+    },
+    progressTotal: {
+      type: Number,
+      default: 0
+    },
+    progressStep: {
+      type: String,
+      default: ''
+    },
     errors: [importErrorSchema],
     previewRows: {
       type: [mongoose.Schema.Types.Mixed],

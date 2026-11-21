@@ -55,20 +55,25 @@ export const adminImportExportController = {
 
   /**
    * POST /api/v1/admin/bulk/:module/validate
-   * Parses uploaded Excel buffer and returns pre-import validation preview
+   * Parses uploaded Excel buffer (and optional Images ZIP) and returns pre-import validation preview
    */
   async validateUpload(req, res, next) {
     try {
       const { module } = req.params;
 
-      if (!req.file || !req.file.buffer) {
+      const excelFile = req.file || req.files?.file?.[0];
+      const imagesZipFile = req.files?.imagesZip?.[0] || null;
+
+      if (!excelFile || !excelFile.buffer) {
         throw ApiError.badRequest('Please upload an Excel (.xlsx) file.');
       }
 
       const validationResult = await universalImportService.validateUpload({
         module,
-        buffer: req.file.buffer,
-        originalname: req.file.originalname,
+        buffer: excelFile.buffer,
+        originalname: excelFile.originalname,
+        imagesZipBuffer: imagesZipFile?.buffer || null,
+        imagesZipName: imagesZipFile?.originalname || null,
         user: req.user
       });
 
@@ -89,7 +94,7 @@ export const adminImportExportController = {
    */
   async executeImport(req, res, next) {
     try {
-      const { jobId, importMode = 'create_only' } = req.body;
+      const { jobId, importMode = 'create_only', replaceImages = false } = req.body;
 
       if (!jobId) {
         throw ApiError.badRequest('jobId is required to execute import.');
@@ -98,10 +103,25 @@ export const adminImportExportController = {
       const result = await universalImportService.executeImport({
         jobId,
         importMode,
+        replaceImages: Boolean(replaceImages),
         user: req.user
       });
 
       return sendSuccess(res, HTTP_STATUS.OK, result.summary, result);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
+   * GET /api/v1/admin/bulk/job/:jobId/status
+   * Retrieves live progress and execution status of an import job
+   */
+  async getJobStatus(req, res, next) {
+    try {
+      const { jobId } = req.params;
+      const status = await universalImportService.getJobStatus(jobId);
+      return sendSuccess(res, HTTP_STATUS.OK, 'Import job status retrieved', status);
     } catch (err) {
       next(err);
     }

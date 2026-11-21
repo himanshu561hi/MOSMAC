@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 
 export const PRODUCT_STATUSES = ['draft', 'published', 'archived'];
-export const PRODUCT_BADGES = ['NEW', 'BESTSELLER', 'HOT', 'FEATURED'];
+export const PRODUCT_BADGES = ['NEW', 'BESTSELLER', 'HOT', 'FEATURED', 'TRENDING'];
 
 const variantSchema = new mongoose.Schema(
   {
@@ -86,6 +86,11 @@ const productImageSchema = new mongoose.Schema(
     order: {
       type: Number,
       default: 0
+    },
+    contentHash: {
+      type: String,
+      default: '',
+      index: true
     }
   },
   { _id: true }
