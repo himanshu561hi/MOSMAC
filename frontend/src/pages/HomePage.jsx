@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowRight,
@@ -31,6 +31,7 @@ const RECENTLY_VIEWED_KEY = 'aurora_recently_viewed';
 export function HomePage() {
   const [data, setData] = useState(null);
   const [dynamicSections, setDynamicSections] = useState([]);
+  const [allCategories, setAllCategories] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [recentlyViewed, setRecentlyViewed] = useState([]);
@@ -43,11 +44,12 @@ export function HomePage() {
       setIsLoading(true);
       setError('');
       try {
-        const [homeData, cmsLayout, cmsBanners, storefrontSections] = await Promise.all([
+        const [homeData, cmsLayout, cmsBanners, storefrontSections, categoriesTree] = await Promise.all([
           storefrontService.getHomepageData().catch(() => null),
           cmsService.getHomepageLayout().catch(() => []),
           cmsService.getPublicBanners('hero').catch(() => []),
-          homepageSectionService.getStorefrontSections().catch(() => [])
+          homepageSectionService.getStorefrontSections().catch(() => []),
+          storefrontService.getCategories(true).catch(() => [])
         ]);
 
         const mergedData = { ...(homeData || {}) };
@@ -68,6 +70,7 @@ export function HomePage() {
         }
         mergedData.cmsSections = cmsLayout || [];
         setData(mergedData);
+        setAllCategories(Array.isArray(categoriesTree) ? categoriesTree : []);
         const resolvedSections =
           Array.isArray(storefrontSections) && storefrontSections.length > 0
             ? storefrontSections
@@ -95,10 +98,68 @@ export function HomePage() {
     }
   }, []);
 
-  const categoriesToDisplay =
-    data?.featuredCategories && data.featuredCategories.length > 0
+  // Curated category visual assets
+  const CURATED_CATEGORY_PHOTOS = {
+    'makeup': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ2Kx9T8YoOViW4qGQf_nYzAzTgTFr7hEnBBA7fEUhIZQ&s=10',
+    'face-makeup': '/images/hero/hero-1-foundation.jpg',
+    'eye-makeup': '/images/hero/hero-3-eyeshadow-palette.jpg',
+    'lip-makeup': '/images/hero/hero-5-lip-balm.jpg',
+    'foundation-bb-cream': '/images/hero/hero-1-foundation.jpg',
+    'face-powder': '/images/hero/hero-2-loose-powder.jpg',
+    'eyeshadow-palettes': '/images/hero/hero-3-eyeshadow-palette.jpg',
+    'eyeliner-kajal': '/images/hero/hero-4-eyeliner.jpg',
+    'lipstick-lip-crayon': '/images/hero/hero-5-lip-balm.jpg',
+    'lip-balm': '/images/hero/hero-5-lip-balm.jpg',
+    'makeup-tools-accessories': 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&w=300&q=80',
+    'makeup-kits-sets': 'https://images.unsplash.com/photo-1512496015851-a90fb38ba796?auto=format&fit=crop&w=300&q=80'
+  };
+
+  // Build 6-8 distinct discovery categories
+  const categoriesToDisplay = useMemo(() => {
+    const raw = data?.featuredCategories && data.featuredCategories.length > 2
       ? data.featuredCategories
-      : data?.categories || [];
+      : [];
+
+    if (raw.length >= 4) {
+      return raw.map((c) => ({
+        ...c,
+        imageUrl: c.imageUrl || CURATED_CATEGORY_PHOTOS[c.slug]
+      }));
+    }
+
+    // Expand subcategories when root has only 1 category ('Makeup')
+    const tree = allCategories && allCategories.length > 0 ? allCategories : [];
+    const expanded = [];
+
+    if (data?.featuredCategories?.[0]) {
+      expanded.push(data.featuredCategories[0]);
+    }
+
+    tree.forEach((cat) => {
+      if (Array.isArray(cat.children)) {
+        cat.children.forEach((child) => {
+          expanded.push(child);
+          if (Array.isArray(child.children)) {
+            child.children.slice(0, 2).forEach((sub) => expanded.push(sub));
+          }
+        });
+      }
+    });
+
+    const uniqueBySlug = [];
+    const seen = new Set();
+    for (const c of expanded) {
+      if (!seen.has(c.slug)) {
+        seen.add(c.slug);
+        uniqueBySlug.push({
+          ...c,
+          imageUrl: c.imageUrl || CURATED_CATEGORY_PHOTOS[c.slug]
+        });
+      }
+    }
+
+    return uniqueBySlug.slice(0, 8);
+  }, [data?.featuredCategories, allCategories]);
 
   const featuredSection = dynamicSections.find((s) => s.slug === 'featured');
   // Only active if the section exists in dynamicSections (which filters isActive: true) and has products
@@ -171,24 +232,24 @@ export function HomePage() {
           <div className="flex sm:grid sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3 sm:gap-4 overflow-x-auto scrollbar-none pb-2 pt-1 -mx-4 px-4 sm:mx-0 sm:px-0">
             {categoriesToDisplay.slice(0, 8).map((cat) => (
               <Link
-                key={cat._id}
+                key={cat._id || cat.slug}
                 to={`/category/${cat.slug}`}
-                className="group shrink-0 flex flex-col items-center text-center gap-2"
+                className="group shrink-0 flex flex-col items-center text-center gap-1.5 w-[68px] sm:w-[84px]"
               >
-                <div className="w-18 h-18 sm:w-24 sm:h-24 rounded-full bg-gray-50 border border-gray-200 p-1 overflow-hidden group-hover:border-gray-900 group-hover:shadow-md transition-all flex items-center justify-center">
+                <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-full bg-gray-50 border border-gray-200/90 p-0.5 overflow-hidden group-hover:border-gray-900 group-hover:shadow-md transition-all flex items-center justify-center shrink-0 shadow-2xs">
                   {cat.imageUrl ? (
                     <img
                       src={cat.imageUrl}
                       alt={cat.name}
-                      className="w-full h-full object-cover rounded-full group-hover:scale-105 transition-transform"
+                      className="w-full h-full object-cover rounded-full group-hover:scale-105 transition-transform duration-200"
                     />
                   ) : (
-                    <div className="w-full h-full rounded-full bg-gradient-to-tr from-rose-50 via-orange-50 to-amber-50 flex items-center justify-center text-gray-700 font-bold text-sm sm:text-base">
+                    <div className="w-full h-full rounded-full bg-gradient-to-tr from-rose-50 via-orange-50 to-amber-50 flex items-center justify-center text-gray-700 font-bold text-xs sm:text-sm">
                       {cat.name.slice(0, 2).toUpperCase()}
                     </div>
                   )}
                 </div>
-                <span className="text-xs font-medium text-gray-800 group-hover:text-black transition-colors line-clamp-1 max-w-[80px] sm:max-w-[90px]">
+                <span className="text-[11px] sm:text-xs font-semibold text-gray-800 group-hover:text-black transition-colors line-clamp-1 max-w-[68px] sm:max-w-[84px] leading-tight">
                   {cat.name}
                 </span>
               </Link>
