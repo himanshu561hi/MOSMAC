@@ -220,25 +220,31 @@ export function ProductCard({ product, className = '' }) {
         </div>
 
         {/* Pricing & Add to Cart Action */}
-        <div className="pt-2 border-t border-gray-50 flex items-center justify-between gap-2">
+        <div className="pt-2 border-t border-gray-100 flex flex-col gap-2">
+          {/* Price row: Clean, prominent, and completely free from overlap */}
           <div className="flex items-baseline gap-1.5 flex-wrap min-w-0">
-            <span className="text-sm sm:text-base font-bold text-gray-900">
+            <span className="text-sm sm:text-base font-black text-gray-950 tracking-tight">
               {formatCurrency(price)}
             </span>
             {mrp > price && (
-              <span className="text-[11px] sm:text-xs text-gray-400 line-through">
+              <span className="text-[11px] sm:text-xs text-gray-400 line-through font-medium">
                 {formatCurrency(mrp)}
+              </span>
+            )}
+            {discount >= 10 && (
+              <span className="text-[10px] font-bold text-emerald-600">
+                {discount}% off
               </span>
             )}
           </div>
 
-          {/* Add to Cart Button (Right Side) */}
+          {/* Full-width Add to Cart Button (touch-friendly on phone, zero overlap) */}
           <button
             type="button"
             disabled={isOutOfStock || isAddingToCart}
             onClick={handleAddToCart}
             aria-label={isOutOfStock ? 'Sold Out' : isAdded ? 'Added to Bag' : `Add ${product.title} to Cart`}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 shrink-0 transition-all shadow-2xs active:scale-[0.98] ${
+            className={`w-full py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-2xs active:scale-[0.98] ${
               isOutOfStock
                 ? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
                 : isAdded
