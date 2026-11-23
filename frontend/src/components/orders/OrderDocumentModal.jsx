@@ -9,10 +9,11 @@ import {
   ShieldCheck,
   Truck,
   Building2,
-  AlertCircle
+  AlertCircle,
+  ExternalLink
 } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/utils/formatters';
-import { printElementDirectly } from '@/utils/printDocument';
+import { printElementDirectly, openDocumentInNewTab } from '@/utils/printDocument';
 
 // Number to Indian English words converter for GST invoice compliance
 function numberToWordsINR(amountInPaise) {
@@ -121,6 +122,13 @@ export function OrderDocumentModal({
     printElementDirectly('printable-order-document', docTitle);
   };
 
+  const handleOpenNewTab = () => {
+    const docTitle = activeTab === 'invoice'
+      ? `Tax_Invoice_${invoiceNumber}`
+      : `Packing_Slip_${order.orderNumber}`;
+    openDocumentInNewTab('printable-order-document', docTitle);
+  };
+
   return (
     <div
       onClick={(e) => {
@@ -162,10 +170,20 @@ export function OrderDocumentModal({
             <button
               type="button"
               onClick={handlePrint}
-              className="px-4 py-1.5 rounded-xl text-xs font-black bg-emerald-500 hover:bg-emerald-400 text-slate-950 flex items-center gap-1.5 shadow-sm transition-transform active:scale-95 cursor-pointer"
+              className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-500 hover:bg-emerald-400 text-slate-950 flex items-center gap-1.5 shadow-sm transition-transform active:scale-95 cursor-pointer"
+              title="Print / Save as PDF"
             >
               <Printer className="w-4 h-4" />
               <span>Print / Save PDF</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleOpenNewTab}
+              className="px-3 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="Open document in a clean new tab"
+            >
+              <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
+              <span className="hidden sm:inline">New Tab</span>
             </button>
             <button
               type="button"
