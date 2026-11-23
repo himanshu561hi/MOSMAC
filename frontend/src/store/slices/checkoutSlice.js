@@ -150,10 +150,13 @@ export const checkoutSlice = createSlice({
       })
       .addCase(fetchAddresses.fulfilled, (state, action) => {
         state.loadingAddresses = false;
-        state.addresses = action.payload || [];
+        const addresses = Array.isArray(action.payload)
+          ? action.payload
+          : (action.payload?.data?.addresses || action.payload?.data || []);
+        state.addresses = addresses;
         // Auto-select default shipping address if not already selected
-        if (!state.selectedShippingAddress && action.payload && action.payload.length > 0) {
-          const defaultShip = action.payload.find((a) => a.isDefaultShipping) || action.payload[0];
+        if (!state.selectedShippingAddress && addresses.length > 0) {
+          const defaultShip = addresses.find((a) => a.isDefaultShipping) || addresses[0];
           state.selectedShippingAddress = defaultShip;
           if (state.useSameForBilling) {
             state.selectedBillingAddress = defaultShip;
@@ -168,10 +171,13 @@ export const checkoutSlice = createSlice({
     // Save address
     builder
       .addCase(saveAddress.fulfilled, (state, action) => {
-        state.addresses.push(action.payload);
-        state.selectedShippingAddress = action.payload;
-        if (state.useSameForBilling) {
-          state.selectedBillingAddress = action.payload;
+        const address = action.payload?.data?.address || action.payload?.data || action.payload;
+        if (address && typeof address === 'object') {
+          state.addresses.push(address);
+          state.selectedShippingAddress = address;
+          if (state.useSameForBilling) {
+            state.selectedBillingAddress = address;
+          }
         }
       });
 
@@ -183,7 +189,19 @@ export const checkoutSlice = createSlice({
       })
       .addCase(fetchCheckoutQuote.fulfilled, (state, action) => {
         state.loadingQuote = false;
-        state.quote = action.payload;
+        const raw = action.payload?.data || action.payload?.quote || action.payload;
+        if (raw && typeof raw === 'object') {
+          state.quote = {
+            ...raw,
+            subtotal: raw.pricing?.subtotal ?? raw.subtotal,
+            discountAmount: raw.pricing?.discountTotal ?? raw.pricing?.discountAmount ?? raw.discountAmount ?? 0,
+            shippingFee: raw.pricing?.shippingFee ?? raw.shippingPolicy?.shippingFee ?? raw.shippingFee ?? 0,
+            grandTotal: raw.pricing?.grandTotal ?? raw.grandTotal,
+            totalTax: raw.pricing?.taxTotal ?? raw.taxBreakdown?.totalTax
+          };
+        } else {
+          state.quote = raw;
+        }
       })
       .addCase(fetchCheckoutQuote.rejected, (state, action) => {
         state.loadingQuote = false;
@@ -196,11 +214,12 @@ export const checkoutSlice = createSlice({
         state.codEligibility.checking = true;
       })
       .addCase(checkCodEligibility.fulfilled, (state, action) => {
+        const codData = action.payload?.data || action.payload;
         state.codEligibility = {
-          eligible: action.payload.eligible,
-          reason: action.payload.reason,
-          minAmount: action.payload.minAmount,
-          maxAmount: action.payload.maxAmount,
+          eligible: Boolean(codData?.eligible),
+          reason: codData?.reason,
+          minAmount: codData?.minAmount,
+          maxAmount: codData?.maxAmount,
           checking: false
         };
       })
@@ -222,7 +241,7 @@ export const checkoutSlice = createSlice({
       })
       .addCase(placeOrder.fulfilled, (state, action) => {
         state.isPlacingOrder = false;
-        state.currentOrder = action.payload;
+        state.currentOrder = action.payload?.data?.order || action.payload?.order || action.payload?.data || action.payload;
       })
       .addCase(placeOrder.rejected, (state, action) => {
         state.isPlacingOrder = false;

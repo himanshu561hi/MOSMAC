@@ -52,7 +52,15 @@ export function CheckoutPage() {
   const dispatch = useDispatch();
 
   const { user, isAuthenticated } = useSelector((state) => state.auth);
-  const { items: cartItems, itemCount, subtotal: cartSubtotal, appliedCoupon } = useSelector((state) => state.cart);
+  const {
+    items: cartItems,
+    itemCount,
+    subtotal: cartSubtotal,
+    discountAmount: cartDiscountAmount,
+    shippingFee: cartShippingFee,
+    grandTotal: cartGrandTotal,
+    appliedCoupon
+  } = useSelector((state) => state.cart);
   const {
     quote,
     loadingQuote,
@@ -117,15 +125,21 @@ export function CheckoutPage() {
 
   // When quote and postal code are available, check COD eligibility
   useEffect(() => {
-    if (isValidPinCode(activePostalCode) && quote?.grandTotal) {
+    const totalAmount =
+      quote?.pricing?.grandTotal ??
+      quote?.grandTotal ??
+      cartGrandTotal ??
+      (cartSubtotal > 0 ? cartSubtotal : 0);
+
+    if (isValidPinCode(activePostalCode) && totalAmount > 0) {
       dispatch(
         checkCodEligibility({
           postalCode: activePostalCode,
-          amount: quote.grandTotal
+          amount: totalAmount
         })
       );
     }
-  }, [dispatch, activePostalCode, quote?.grandTotal]);
+  }, [dispatch, activePostalCode, quote?.pricing?.grandTotal, quote?.grandTotal, cartGrandTotal, cartSubtotal]);
 
   const validateAddressForm = () => {
     const errors = {};
@@ -272,7 +286,11 @@ export function CheckoutPage() {
     };
 
     try {
-      const orderResult = await dispatch(placeOrder({ orderData, idempotencyKey })).unwrap();
+      const rawResult = await dispatch(placeOrder({ orderData, idempotencyKey })).unwrap();
+      const orderResult = {
+        order: rawResult?.data?.order || rawResult?.order || rawResult,
+        razorpayOrder: rawResult?.data?.razorpayOrder || rawResult?.razorpayOrder
+      };
 
       if (paymentMethod === 'cod') {
         // COD order is immediately confirmed
@@ -388,12 +406,55 @@ export function CheckoutPage() {
     );
   }
 
-  const effectiveQuote = quote || {
-    subtotal: cartSubtotal,
-    discountAmount: 0,
-    shippingFee: cartSubtotal >= 99900 ? 0 : 4900,
-    taxBreakdown: { totalTax: Math.round(cartSubtotal * 0.18) },
-    grandTotal: cartSubtotal + (cartSubtotal >= 99900 ? 0 : 4900)
+  const calculatedItemsSubtotal = useMemo(() => {
+    if (!cartItems || cartItems.length === 0) return 0;
+    return cartItems.reduce((sum, item) => {
+      const price = item.unitPrice || item.price || item.addedPrice || item.sellingPrice || 0;
+      const qty = item.quantity || 1;
+      return sum + (price * qty);
+    }, 0);
+  }, [cartItems]);
+
+  const rawSubtotal =
+    quote?.pricing?.subtotal ??
+    quote?.data?.pricing?.subtotal ??
+    quote?.subtotal ??
+    quote?.data?.subtotal ??
+    (cartSubtotal > 0 ? cartSubtotal : calculatedItemsSubtotal);
+
+  const rawDiscount =
+    quote?.pricing?.discountTotal ??
+    quote?.pricing?.discountAmount ??
+    quote?.data?.pricing?.discountTotal ??
+    quote?.discountAmount ??
+    cartDiscountAmount ??
+    0;
+
+  const rawShipping =
+    quote?.pricing?.shippingFee ??
+    quote?.data?.pricing?.shippingFee ??
+    quote?.shippingFee ??
+    quote?.shippingPolicy?.shippingFee ??
+    (rawSubtotal >= 99900 ? 0 : (rawSubtotal > 0 ? 4900 : 0));
+
+  const rawGrandTotal =
+    quote?.pricing?.grandTotal ??
+    quote?.data?.pricing?.grandTotal ??
+    quote?.grandTotal ??
+    Math.max(0, rawSubtotal - rawDiscount + rawShipping);
+
+  const rawTax =
+    quote?.pricing?.taxTotal ??
+    quote?.data?.pricing?.taxTotal ??
+    quote?.taxBreakdown?.totalTax ??
+    Math.round(Math.max(0, rawSubtotal - rawDiscount) * 0.18);
+
+  const effectiveQuote = {
+    subtotal: rawSubtotal,
+    discountAmount: rawDiscount,
+    shippingFee: rawShipping,
+    grandTotal: rawGrandTotal,
+    taxBreakdown: { totalTax: rawTax }
   };
 
   return (

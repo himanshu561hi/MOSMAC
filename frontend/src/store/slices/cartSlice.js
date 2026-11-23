@@ -118,17 +118,17 @@ export const mergeGuestCart = createAsyncThunk(
 
 const applyCartPayload = (state, payload) => {
   if (!payload) return;
-  const cart = payload.cart || payload;
+  const cart = payload.cart || payload.data?.cart || payload.data || payload;
   state.items = cart.items || [];
   state.itemCount = cart.itemCount || (cart.items ? cart.items.reduce((sum, item) => sum + (item.quantity || 1), 0) : 0);
   state.distinctItemCount = cart.distinctItemCount || (cart.items ? cart.items.length : 0);
-  state.subtotal = cart.subtotal || 0;
-  state.discountAmount = cart.discountAmount || 0;
-  state.shippingFee = cart.shippingFee || 0;
-  state.grandTotal = cart.grandTotal || 0;
-  state.freeShippingThreshold = cart.freeShippingThreshold || 99900;
-  state.freeShippingEligible = cart.freeShippingEligible || false;
-  state.amountNeededForFreeShipping = Math.max(0, (cart.freeShippingThreshold || 99900) - (cart.subtotal || 0));
+  state.subtotal = cart.pricing?.subtotal ?? cart.subtotal ?? (cart.items ? cart.items.reduce((acc, i) => acc + (i.unitPrice || i.addedPrice || i.price || 0) * (i.quantity || 1), 0) : 0);
+  state.discountAmount = cart.pricing?.discountTotal ?? cart.pricing?.discountAmount ?? cart.discountTotal ?? cart.discountAmount ?? 0;
+  state.shippingFee = cart.pricing?.shippingFee ?? cart.shippingFee ?? 0;
+  state.grandTotal = cart.pricing?.grandTotal ?? cart.grandTotal ?? Math.max(0, state.subtotal - state.discountAmount + state.shippingFee);
+  state.freeShippingThreshold = cart.shippingPolicy?.freeShippingThreshold ?? cart.freeShippingThreshold ?? 99900;
+  state.freeShippingEligible = cart.shippingPolicy?.freeShippingEligible ?? cart.freeShippingEligible ?? (state.subtotal >= 99900);
+  state.amountNeededForFreeShipping = Math.max(0, state.freeShippingThreshold - state.subtotal);
   state.appliedCoupon = cart.appliedCoupon || null;
   state.warnings = cart.warnings || [];
   state.error = null;
