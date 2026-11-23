@@ -543,56 +543,69 @@ export function StorefrontLayout() {
                 className="w-full"
               />
 
-              <nav className="flex flex-col space-y-1 text-sm font-medium text-gray-800">
+              {/* Quick Navigation: 2 Rows x 3 Columns */}
+              <div className="grid grid-cols-3 gap-2 text-center">
                 <Link
                   to="/"
                   onClick={() => dispatch(setMobileMenuOpen(false))}
-                  className="px-3 py-2 rounded-lg hover:bg-gray-50"
+                  className="flex items-center justify-center p-2.5 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-800 border border-gray-200/60 font-semibold text-xs transition-all active:scale-95 select-none"
                 >
                   Home
                 </Link>
                 <Link
                   to="/whats-new"
                   onClick={() => dispatch(setMobileMenuOpen(false))}
-                  className="px-3 py-2 rounded-lg hover:bg-gray-50 font-semibold text-rose-600"
+                  className="flex items-center justify-center p-2.5 rounded-xl bg-rose-50/70 hover:bg-rose-100/70 text-rose-600 border border-rose-200/60 font-bold text-xs transition-all active:scale-95 select-none"
                 >
                   What's New
                 </Link>
                 <Link
                   to="/products?section=trending"
                   onClick={() => dispatch(setMobileMenuOpen(false))}
-                  className="px-3 py-2 rounded-lg hover:bg-gray-50 font-medium text-slate-800"
+                  className="flex items-center justify-center p-2.5 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-800 border border-gray-200/60 font-semibold text-xs transition-all active:scale-95 select-none"
                 >
                   Trending Now
                 </Link>
                 <Link
                   to="/products?section=bestsellers"
                   onClick={() => dispatch(setMobileMenuOpen(false))}
-                  className="px-3 py-2 rounded-lg hover:bg-gray-50 font-medium text-slate-800"
+                  className="flex items-center justify-center p-2.5 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-800 border border-gray-200/60 font-semibold text-xs transition-all active:scale-95 select-none"
                 >
                   Bestsellers
                 </Link>
                 <Link
                   to="/offers"
                   onClick={() => dispatch(setMobileMenuOpen(false))}
-                  className="px-3 py-2 rounded-lg hover:bg-gray-50 font-medium text-slate-800"
+                  className="flex items-center justify-center p-2.5 rounded-xl bg-amber-50/70 hover:bg-amber-100/70 text-amber-800 border border-amber-200/60 font-bold text-xs transition-all active:scale-95 select-none"
                 >
                   Offers & Deals
                 </Link>
                 <Link
                   to="/mosmac-select"
                   onClick={() => dispatch(setMobileMenuOpen(false))}
-                  className="px-3 py-2 rounded-lg hover:bg-gray-50 font-medium text-slate-800"
+                  className="flex items-center justify-center p-2.5 rounded-xl bg-purple-50/70 hover:bg-purple-100/70 text-purple-800 border border-purple-200/60 font-bold text-xs transition-all active:scale-95 select-none"
                 >
                   MOSMAC Select
                 </Link>
-                <Link
-                  to="/products"
-                  onClick={() => dispatch(setMobileMenuOpen(false))}
-                  className="px-3 py-2 rounded-lg hover:bg-gray-50 font-bold text-[#E04038]"
-                >
-                  All Products
-                </Link>
+              </div>
+
+              {/* All Products Action Bar */}
+              <Link
+                to="/products"
+                onClick={() => dispatch(setMobileMenuOpen(false))}
+                className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-slate-950 hover:bg-black text-white font-bold text-xs shadow-xs transition-all active:scale-[0.99]"
+              >
+                <span>All Products</span>
+                <span className="text-[11px] font-normal text-slate-300">View Full Catalog →</span>
+              </Link>
+
+              <div className="border-t border-gray-100 pt-1">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400 px-1 pb-1 block">
+                  Categories & Brands
+                </span>
+              </div>
+
+              <nav className="flex flex-col space-y-1 text-sm font-medium text-gray-800">
 
                 {/* Mobile Brands Accordion */}
                 <div className="space-y-1">
