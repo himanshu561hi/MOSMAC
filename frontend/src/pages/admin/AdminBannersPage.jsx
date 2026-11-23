@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { cmsService } from '../../services/cmsService';
 import { BulkActionButtons } from '../../components/admin/BulkActionButtons';
 import {
@@ -12,7 +13,8 @@ import {
   ExternalLink,
   CheckCircle2,
   AlertCircle,
-  Loader2
+  Loader2,
+  ArrowLeft
 } from 'lucide-react';
 
 export function AdminBannersPage() {
@@ -187,6 +189,31 @@ export function AdminBannersPage() {
         </div>
       </div>
 
+      {/* 5-Slide Hero Carousel Rule & Banner Guidelines */}
+      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white rounded-2xl p-5 border border-slate-700 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400 bg-emerald-950/80 px-2.5 py-0.5 rounded-full border border-emerald-600/40">
+              Hero Carousel Rule
+            </span>
+            <span className="text-xs font-semibold text-slate-300">
+              5 Slides Always Guaranteed on Storefront
+            </span>
+          </div>
+          <p className="text-xs sm:text-sm text-slate-200 leading-relaxed max-w-3xl">
+            Homepage hero carousel hamesha <strong>5 slides</strong> display karega. Jitne active banners aap yahan add karenge wo pehle aayenge, aur baaki bachi hui positions default MOSMAC flagship slides se automatically fill ho jayengi (jaise 1 Admin Banner + 4 Default = 5 Total).
+          </p>
+          <div className="flex flex-wrap items-center gap-3 pt-1 text-xs">
+            <span className="inline-flex items-center gap-1.5 bg-slate-800/90 text-emerald-300 px-2.5 py-1 rounded-lg border border-slate-700 font-mono">
+              📐 Desktop Size: <strong>1920 × 700 px</strong> (or 1600 × 600 px)
+            </span>
+            <span className="inline-flex items-center gap-1.5 bg-slate-800/90 text-blue-300 px-2.5 py-1 rounded-lg border border-slate-700 font-mono">
+              📱 Mobile Size: <strong>750 × 900 px</strong> (or 800 × 800 px)
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* Tabs */}
       <div className="flex border-b border-gray-200">
         {[
@@ -340,8 +367,14 @@ export function AdminBannersPage() {
 
       {/* Modal */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm"
+          onClick={() => setModalOpen(false)}
+        >
+          <div
+            className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between border-b pb-3">
               <h3 className="text-lg font-bold text-gray-900">
                 {editingBanner ? 'Edit Banner' : 'Create Banner'}
@@ -398,27 +431,79 @@ export function AdminBannersPage() {
                 />
               </div>
 
+              {/* Desktop Image URL with Pixel Dimensions Guide */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Desktop Image URL *</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-sm font-semibold text-gray-800">
+                    Desktop Image URL *
+                  </label>
+                  <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md font-mono">
+                    Required: 1920 × 700 px
+                  </span>
+                </div>
                 <input
                   type="url"
                   required
                   value={formData.desktopImageUrl}
                   onChange={(e) => setFormData({ ...formData, desktopImageUrl: e.target.value })}
-                  placeholder="https://res.cloudinary.com/.../hero.jpg"
+                  placeholder="https://images.unsplash.com/... or https://res.cloudinary.com/..."
                   className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                 />
+                <p className="text-[11px] text-gray-500 mt-1">
+                  📐 Best resolution for Hero Carousel: <strong>1920 × 700 px</strong> (or 1600 × 600 px). Aspect ratio ~16:6 to 16:9.
+                </p>
+                {formData.desktopImageUrl && (
+                  <div className="mt-2 relative rounded-xl overflow-hidden border border-gray-200 bg-gray-50 aspect-[16/6] max-h-36 flex items-center justify-center">
+                    <img
+                      src={formData.desktopImageUrl}
+                      alt="Desktop Preview"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                      }}
+                    />
+                    <span className="absolute bottom-1.5 right-2 text-[10px] bg-black/70 text-white px-2 py-0.5 rounded-md font-mono backdrop-blur-xs">
+                      1920 × 700 Desktop Preview
+                    </span>
+                  </div>
+                )}
               </div>
 
+              {/* Mobile Image URL with Pixel Dimensions Guide */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Mobile Image URL (Optional)</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-sm font-semibold text-gray-800">
+                    Mobile Image URL (Optional)
+                  </label>
+                  <span className="text-[11px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md font-mono">
+                    Required: 750 × 900 px
+                  </span>
+                </div>
                 <input
                   type="url"
                   value={formData.mobileImageUrl}
                   onChange={(e) => setFormData({ ...formData, mobileImageUrl: e.target.value })}
-                  placeholder="https://res.cloudinary.com/.../hero-mobile.jpg"
+                  placeholder="https://images.unsplash.com/... or leave blank to auto-adapt desktop"
                   className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                 />
+                <p className="text-[11px] text-gray-500 mt-1">
+                  📱 Best resolution for mobile screens: <strong>750 × 900 px</strong> (Portrait / 4:5 ratio) or <strong>800 × 800 px</strong>.
+                </p>
+                {formData.mobileImageUrl && (
+                  <div className="mt-2 relative rounded-xl overflow-hidden border border-gray-200 bg-gray-50 aspect-[4/5] max-h-32 w-24 mx-auto flex items-center justify-center">
+                    <img
+                      src={formData.mobileImageUrl}
+                      alt="Mobile Preview"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                      }}
+                    />
+                    <span className="absolute bottom-1 right-1 text-[9px] bg-black/70 text-white px-1.5 py-0.5 rounded font-mono backdrop-blur-xs">
+                      750 × 900 Mobile
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">

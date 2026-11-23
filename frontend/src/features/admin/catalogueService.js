@@ -14,8 +14,12 @@ export const adminCatalogueService = {
     const res = await apiClient.put(`/categories/${id}`, data);
     return res.data?.category;
   },
-  async deleteCategory(id) {
-    await apiClient.delete(`/categories/${id}`);
+  async getCategoryDeletePreview(id) {
+    const res = await apiClient.get(`/categories/${id}/delete-preview`);
+    return res.data;
+  },
+  async deleteCategory(id, cascade = false) {
+    await apiClient.delete(`/categories/${id}${cascade ? '?cascade=true' : ''}`);
   },
 
   // Brands
@@ -31,8 +35,12 @@ export const adminCatalogueService = {
     const res = await apiClient.put(`/brands/${id}`, data);
     return res.data?.brand;
   },
-  async deleteBrand(id) {
-    await apiClient.delete(`/brands/${id}`);
+  async getBrandDeletePreview(id) {
+    const res = await apiClient.get(`/brands/${id}/delete-preview`);
+    return res.data;
+  },
+  async deleteBrand(id, cascade = false) {
+    await apiClient.delete(`/brands/${id}${cascade ? '?cascade=true' : ''}`);
   },
 
   // Dynamic Attributes
@@ -75,6 +83,9 @@ export const adminCatalogueService = {
   },
   async deleteProduct(id) {
     await apiClient.delete(`/products/${id}`);
+  },
+  async deleteProductPermanent(id) {
+    await apiClient.delete(`/products/${id}?permanent=true`);
   },
 
   // Inventory

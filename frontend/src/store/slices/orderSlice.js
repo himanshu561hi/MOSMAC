@@ -151,10 +151,19 @@ export const orderSlice = createSlice({
       })
       .addCase(fetchCustomerOrders.fulfilled, (state, action) => {
         state.loading = false;
-        state.orders = action.payload.orders || [];
-        state.total = action.payload.pagination?.total || 0;
-        state.page = action.payload.pagination?.page || 1;
-        state.totalPages = action.payload.pagination?.pages || 1;
+        const payload = action.payload;
+        if (Array.isArray(payload)) {
+          state.orders = payload;
+          state.total = payload.length;
+          state.page = 1;
+          state.totalPages = 1;
+        } else {
+          state.orders = payload?.orders || (Array.isArray(payload?.data) ? payload.data : []);
+          const meta = payload?.pagination || payload?.meta || {};
+          state.total = meta.total ?? state.orders.length;
+          state.page = meta.page ?? 1;
+          state.totalPages = meta.totalPages ?? meta.pages ?? 1;
+        }
       })
       .addCase(fetchCustomerOrders.rejected, (state, action) => {
         state.loading = false;
@@ -169,7 +178,7 @@ export const orderSlice = createSlice({
       })
       .addCase(fetchOrderDetail.fulfilled, (state, action) => {
         state.loadingDetail = false;
-        state.currentOrder = action.payload;
+        state.currentOrder = action.payload?.data || action.payload?.order || action.payload;
       })
       .addCase(fetchOrderDetail.rejected, (state, action) => {
         state.loadingDetail = false;
@@ -220,10 +229,19 @@ export const orderSlice = createSlice({
       })
       .addCase(fetchAdminOrders.fulfilled, (state, action) => {
         state.adminLoading = false;
-        state.adminOrders = action.payload.orders || [];
-        state.adminTotal = action.payload.pagination?.total || 0;
-        state.adminPage = action.payload.pagination?.page || 1;
-        state.adminTotalPages = action.payload.pagination?.pages || 1;
+        const payload = action.payload;
+        if (Array.isArray(payload)) {
+          state.adminOrders = payload;
+          state.adminTotal = payload.length;
+          state.adminPage = 1;
+          state.adminTotalPages = 1;
+        } else {
+          state.adminOrders = payload?.orders || (Array.isArray(payload?.data) ? payload.data : []);
+          const meta = payload?.pagination || payload?.meta || {};
+          state.adminTotal = meta.total ?? state.adminOrders.length;
+          state.adminPage = meta.page ?? 1;
+          state.adminTotalPages = meta.totalPages ?? meta.pages ?? 1;
+        }
       })
       .addCase(fetchAdminOrders.rejected, (state, action) => {
         state.adminLoading = false;
@@ -237,7 +255,7 @@ export const orderSlice = createSlice({
       })
       .addCase(fetchAdminOrderDetail.fulfilled, (state, action) => {
         state.adminLoading = false;
-        state.adminCurrentOrder = action.payload;
+        state.adminCurrentOrder = action.payload?.data || action.payload?.order || action.payload;
       })
       .addCase(fetchAdminOrderDetail.rejected, (state, action) => {
         state.adminLoading = false;
@@ -251,10 +269,11 @@ export const orderSlice = createSlice({
       })
       .addCase(updateAdminOrderStatus.fulfilled, (state, action) => {
         state.adminUpdatingStatus = false;
-        state.adminCurrentOrder = action.payload;
-        const idx = state.adminOrders.findIndex((o) => o._id === action.payload._id);
+        const updated = action.payload?.data || action.payload?.order || action.payload;
+        state.adminCurrentOrder = updated;
+        const idx = state.adminOrders.findIndex((o) => o._id === updated?._id);
         if (idx !== -1) {
-          state.adminOrders[idx] = action.payload;
+          state.adminOrders[idx] = updated;
         }
       })
       .addCase(updateAdminOrderStatus.rejected, (state, action) => {
@@ -269,10 +288,11 @@ export const orderSlice = createSlice({
       })
       .addCase(processAdminRefund.fulfilled, (state, action) => {
         state.adminProcessingRefund = false;
-        state.adminCurrentOrder = action.payload.order;
-        const idx = state.adminOrders.findIndex((o) => o._id === action.payload.order?._id);
+        const refunded = action.payload?.order || action.payload?.data || action.payload;
+        state.adminCurrentOrder = refunded;
+        const idx = state.adminOrders.findIndex((o) => o._id === refunded?._id);
         if (idx !== -1) {
-          state.adminOrders[idx] = action.payload.order;
+          state.adminOrders[idx] = refunded;
         }
       })
       .addCase(processAdminRefund.rejected, (state, action) => {

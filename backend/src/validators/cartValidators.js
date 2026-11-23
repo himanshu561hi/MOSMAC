@@ -24,8 +24,8 @@ export const applyCouponSchema = z.object({
 
 export const mergeCartSchema = z.object({
   body: z.object({
-    guestId: z.string().trim().min(1, 'Guest ID is required for merging')
-  })
+    guestId: z.string().trim().optional()
+  }).optional()
 });
 
 export const addToWishlistSchema = z.object({

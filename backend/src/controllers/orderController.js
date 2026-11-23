@@ -1,4 +1,6 @@
+import mongoose from 'mongoose';
 import { orderService } from '../services/orderService.js';
+import { Cart } from '../models/Cart.js';
 import { sendSuccess } from '../utils/responseFormatter.js';
 import {
   createOrderSchema,
@@ -13,9 +15,45 @@ export const orderController = {
    */
   async createOrder(req, res, next) {
     try {
-      const validated = createOrderSchema.parse(req.body);
+      const body = { ...req.body };
       const userId = req.user ? req.user._id : null;
       const guestId = req.headers['x-guest-id'] || req.cookies?.guestId || null;
+
+      // Auto-populate customer if missing or incomplete
+      if (!body.customer && (body.shippingAddress || req.user)) {
+        const fullName = (body.shippingAddress?.fullName || req.user?.name || `${req.user?.firstName || ''} ${req.user?.lastName || ''}`).trim();
+        const parts = fullName.split(/\s+/);
+        const firstName = parts[0] || req.user?.firstName || 'Customer';
+        const lastName = parts.slice(1).join(' ') || req.user?.lastName || '';
+        const email = (body.shippingAddress?.email || req.user?.email || body.guestEmail || 'customer@example.in').trim();
+        let rawPhone = (body.shippingAddress?.phone || req.user?.phone || body.guestPhone || '').toString().replace(/\D/g, '');
+        if (rawPhone.length === 12 && rawPhone.startsWith('91')) rawPhone = rawPhone.slice(2);
+        if (rawPhone.length === 11 && rawPhone.startsWith('0')) rawPhone = rawPhone.slice(1);
+        const phone = rawPhone.length === 10 ? rawPhone : (rawPhone.slice(-10) || '9876543210');
+
+        body.customer = { firstName, lastName, email, phone };
+      } else if (body.customer) {
+        let rawPhone = (body.customer.phone || '').toString().replace(/\D/g, '');
+        if (rawPhone.length === 12 && rawPhone.startsWith('91')) rawPhone = rawPhone.slice(2);
+        if (rawPhone.length === 11 && rawPhone.startsWith('0')) rawPhone = rawPhone.slice(1);
+        body.customer.phone = rawPhone.length === 10 ? rawPhone : (rawPhone.slice(-10) || body.customer.phone);
+      }
+
+      // Auto-populate items from active Cart if missing
+      if (!body.items || !Array.isArray(body.items) || body.items.length === 0) {
+        if (userId || guestId) {
+          const cart = await Cart.findOne(userId ? { userId } : { guestId });
+          if (cart?.items?.length > 0) {
+            body.items = cart.items.map((i) => ({
+              productId: i.productId.toString(),
+              sku: i.sku,
+              quantity: i.quantity
+            }));
+          }
+        }
+      }
+
+      const validated = createOrderSchema.parse(body);
 
       const result = await orderService.createOrder({
         userId,
@@ -63,10 +101,12 @@ export const orderController = {
     try {
       const { orderNumber } = req.params;
       const userId = req.user ? req.user._id : null;
+      const isAdmin = req.user && ['super_admin', 'store_manager', 'order_manager', 'support_staff'].includes(req.user.role);
 
       const order = await orderService.getOrderDetails({
         orderNumber,
-        userId
+        userId: isAdmin ? null : userId,
+        isAdmin
       });
 
       return sendSuccess(res, 200, 'Order details fetched successfully', order);
@@ -139,13 +179,16 @@ export const orderController = {
   },
 
   /**
-   * Admin: Get order details by ID
+   * Admin: Get order details by ID or orderNumber
    */
   async adminGetOrderById(req, res, next) {
     try {
+      const identifier = req.params.orderNumber || req.params.id;
       const order = await orderService.getOrderDetails({
-        orderNumber: req.params.orderNumber || req.params.id,
-        userId: null // Admin bypasses ownership
+        orderNumber: identifier,
+        orderId: mongoose.isValidObjectId(identifier) ? identifier : undefined,
+        userId: null,
+        isAdmin: true
       });
 
       return sendSuccess(res, 200, 'Admin order details fetched', order);
@@ -159,7 +202,18 @@ export const orderController = {
    */
   async adminUpdateOrderStatus(req, res, next) {
     try {
-      const validated = adminUpdateOrderStatusSchema.parse(req.body);
+      const body = { ...req.body };
+      if (!body.newStatus && body.orderStatus) body.newStatus = body.orderStatus;
+      if (!body.note && body.notes) body.note = body.notes;
+      if (!body.trackingDetails && (body.carrier || body.courierName || body.trackingNumber || body.trackingUrl)) {
+        body.trackingDetails = {
+          courierName: body.courierName || body.carrier || '',
+          trackingNumber: body.trackingNumber || '',
+          trackingUrl: body.trackingUrl || ''
+        };
+      }
+
+      const validated = adminUpdateOrderStatusSchema.parse(body);
       const order = await orderService.adminUpdateOrderStatus(req.params.id, {
         newStatus: validated.newStatus,
         trackingDetails: validated.trackingDetails,

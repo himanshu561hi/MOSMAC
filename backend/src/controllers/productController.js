@@ -2,6 +2,9 @@ import { Product } from '../models/Product.js';
 import { Category } from '../models/Category.js';
 import { Brand } from '../models/Brand.js';
 import { InventoryLog } from '../models/InventoryLog.js';
+import { Order } from '../models/Order.js';
+import { HomepageSection } from '../models/HomepageSection.js';
+import { HomepageSectionProduct } from '../models/HomepageSectionProduct.js';
 import { ApiError } from '../utils/ApiError.js';
 import { sendSuccess } from '../utils/responseFormatter.js';
 import { HTTP_STATUS } from '../constants/httpStatusCodes.js';
@@ -29,14 +32,39 @@ export async function getProducts(req, res, next) {
 
     // Category Filter (support category slug or ID, including child categories)
     if (req.query.category) {
-      const cat = await Category.findOne({
-        $or: [{ slug: req.query.category }, { _id: req.query.category.match(/^[0-9a-fA-F]{24}$/) ? req.query.category : null }]
+      const rawCategory = req.query.category.trim();
+      let cat = await Category.findOne({
+        $or: [{ slug: rawCategory }, { _id: rawCategory.match(/^[0-9a-fA-F]{24}$/) ? rawCategory : null }]
       });
+      if (!cat) {
+        const altSlug = rawCategory.endsWith('es')
+          ? rawCategory.slice(0, -2)
+          : rawCategory.endsWith('s')
+          ? rawCategory.slice(0, -1)
+          : `${rawCategory}es`;
+        const altSlugS = rawCategory.endsWith('s') ? rawCategory.slice(0, -1) : `${rawCategory}s`;
+        cat = await Category.findOne({ slug: { $in: [altSlug, altSlugS] } });
+      }
       if (cat) {
-        // Match this category or any child category that has this in ancestors
-        const descendantCategories = await Category.find({ 'ancestors._id': cat._id }).select('_id');
-        const catIds = [cat._id, ...descendantCategories.map((c) => c._id)];
-        query.categoryId = { $in: catIds };
+        // Match this category or any descendant category (check both parentId tree and ancestors._id)
+        const allCatIds = [cat._id];
+        let currentParents = [cat._id];
+        for (let d = 0; d < 5; d++) {
+          if (currentParents.length === 0) break;
+          const children = await Category.find({
+            $or: [
+              { parentId: { $in: currentParents } },
+              { 'ancestors._id': { $in: currentParents } }
+            ]
+          }).select('_id');
+          const newIds = children
+            .map((c) => c._id)
+            .filter((id) => !allCatIds.some((existing) => existing.toString() === id.toString()));
+          if (newIds.length === 0) break;
+          allCatIds.push(...newIds);
+          currentParents = newIds;
+        }
+        query.categoryId = { $in: allCatIds };
       }
     }
 
@@ -55,9 +83,34 @@ export async function getProducts(req, res, next) {
       }
     }
 
-    // Featured Filter
-    if (req.query.featured === 'true') {
-      query.isFeatured = true;
+    // Homepage Section & Collection Filters (e.g. ?section=trending, ?section=bestsellers, ?featured=true, ?section=mosmac_select, ?discount=true)
+    const targetSectionSlug = req.query.section ||
+      (req.query.trending === 'true' || req.query.sort === 'trending' ? 'trending' : null) ||
+      (req.query.bestseller === 'true' || req.query.bestsellers === 'true' || req.query.sort === 'best_selling' ? 'bestsellers' : null) ||
+      (req.query.featured === 'true' ? 'featured' : null) ||
+      (req.query.select === 'true' ? 'mosmac_select' : null) ||
+      (req.query.discount === 'true' ? 'offers_deals' : null);
+
+    let sectionProductIds = [];
+    if (targetSectionSlug) {
+      const section = await HomepageSection.findOne({ slug: targetSectionSlug });
+      if (section) {
+        const assignments = await HomepageSectionProduct.find({ sectionId: section._id }).sort({ displayOrder: 1 });
+        sectionProductIds = assignments.map((a) => a.productId);
+        if (sectionProductIds.length > 0) {
+          query._id = { $in: sectionProductIds };
+        } else if (targetSectionSlug === 'featured') {
+          query.isFeatured = true;
+        } else if (targetSectionSlug === 'offers_deals' || req.query.discount === 'true') {
+          query.$expr = { $gt: ['$baseMrp', '$basePrice'] };
+        }
+      } else if (targetSectionSlug === 'featured') {
+        query.isFeatured = true;
+      } else if (targetSectionSlug === 'offers_deals' || req.query.discount === 'true') {
+        query.$expr = { $gt: ['$baseMrp', '$basePrice'] };
+      }
+    } else if (req.query.discount === 'true') {
+      query.$expr = { $gt: ['$baseMrp', '$basePrice'] };
     }
 
     // Availability Filter (In Stock Only)
@@ -161,6 +214,12 @@ export async function getProducts(req, res, next) {
         .limit(limit),
       Product.countDocuments(query)
     ]);
+
+    // Preserve section displayOrder if no explicit sort was requested by customer
+    if (sectionProductIds.length > 0 && !req.query.sortBy) {
+      const orderMap = new Map(sectionProductIds.map((id, idx) => [id.toString(), idx]));
+      products.sort((a, b) => (orderMap.get(a._id.toString()) ?? 999) - (orderMap.get(b._id.toString()) ?? 999));
+    }
 
     return sendSuccess(
       res,
@@ -421,6 +480,21 @@ export async function deleteProduct(req, res, next) {
     const product = await Product.findById(req.params.id);
     if (!product) {
       throw ApiError.notFound('Product not found');
+    }
+
+    const orderCount = await Order.countDocuments({ 'items.productId': product._id });
+
+    // If permanent deletion requested and no orders exist, delete permanently
+    if (req.query.permanent === 'true') {
+      if (orderCount === 0) {
+        await Product.deleteOne({ _id: product._id });
+        return sendSuccess(res, HTTP_STATUS.OK, 'Product permanently deleted successfully');
+      } else {
+        // If orders exist, archive and disassociate to protect historical order records
+        product.status = 'archived';
+        await product.save();
+        return sendSuccess(res, HTTP_STATUS.OK, 'Product has order history, safely archived');
+      }
     }
 
     // Soft delete by setting status to archived

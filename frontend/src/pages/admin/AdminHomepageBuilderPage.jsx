@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { cmsService } from '../../services/cmsService';
 import {
   LayoutTemplate,
   Plus,
   ArrowUp,
   ArrowDown,
+  ArrowLeft,
   Eye,
   EyeOff,
   Trash2,
@@ -186,6 +188,17 @@ export function AdminHomepageBuilderPage() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
+      {/* Back to CMS Hub */}
+      <div>
+        <Link
+          to="/admin/cms"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg shadow-2xs transition-colors"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          Back to CMS Hub
+        </Link>
+      </div>
+
       {/* Title & Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>

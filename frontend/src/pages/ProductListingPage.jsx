@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams, useParams, Link } from 'react-router-dom';
+import { useSearchParams, useParams, Link, useNavigate } from 'react-router-dom';
 import { storefrontService } from '@/services/storefrontService';
 import ProductCard from '@/components/product/ProductCard';
 import FilterSidebar from '@/components/product/FilterSidebar';
@@ -16,10 +16,13 @@ import {
 } from 'lucide-react';
 import { formatCurrency } from '@/utils/formatters';
 import { SeoHead } from '@/components/common/SeoHead';
+import BrandHeroShowcase from '@/components/brand/BrandHeroShowcase';
+import Pagination from '@/components/common/Pagination';
 
 export function ProductListingPage() {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { categorySlug } = useParams();
+  const { categorySlug, brandSlug } = useParams();
 
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -31,7 +34,9 @@ export function ProductListingPage() {
 
   // Extract query parameters
   const currentCategorySlug = categorySlug || searchParams.get('category') || '';
-  const currentBrands = searchParams.get('brand') ? searchParams.get('brand').split(',').filter(Boolean) : [];
+  const currentBrands = brandSlug
+    ? [brandSlug]
+    : (searchParams.get('brand') ? searchParams.get('brand').split(',').filter(Boolean) : []);
   const currentMinPrice = searchParams.get('minPrice') ? String(parseInt(searchParams.get('minPrice'), 10) / 100) : '';
   const currentMaxPrice = searchParams.get('maxPrice') ? String(parseInt(searchParams.get('maxPrice'), 10) / 100) : '';
   const currentInStock = searchParams.get('inStock') === 'true';
@@ -40,6 +45,12 @@ export function ProductListingPage() {
   const currentSortOrder = searchParams.get('sortOrder') || 'desc';
   const currentPage = parseInt(searchParams.get('page'), 10) || 1;
   const searchQuery = searchParams.get('search') || searchParams.get('q') || '';
+  const currentSection = searchParams.get('section') || '';
+  const isFeaturedFilter = searchParams.get('featured') === 'true';
+  const isBestsellerFilter = searchParams.get('bestseller') === 'true' || searchParams.get('bestsellers') === 'true' || searchParams.get('sort') === 'best_selling';
+  const isTrendingFilter = searchParams.get('trending') === 'true' || searchParams.get('sort') === 'trending';
+  const isDiscountFilter = searchParams.get('discount') === 'true' || currentSection === 'offers_deals';
+  const isSelectFilter = searchParams.get('select') === 'true' || currentSection === 'mosmac_select';
 
   // Dynamic attributes parsed from searchParams (e.g. attrs[ram]=16GB)
   const currentDynamicAttrs = {};
@@ -67,6 +78,15 @@ export function ProductListingPage() {
     loadMetadata();
   }, []);
 
+  // Redirect dedicated sections to their bespoke experience pages
+  useEffect(() => {
+    if (currentSection === 'mosmac_select') {
+      navigate('/mosmac-select', { replace: true });
+    } else if (currentSection === 'offers_deals') {
+      navigate('/offers', { replace: true });
+    }
+  }, [currentSection, navigate]);
+
   // Fetch filtered products
   useEffect(() => {
     async function fetchCatalogue() {
@@ -87,6 +107,12 @@ export function ProductListingPage() {
         if (currentInStock) params.inStock = 'true';
         if (currentMinRating) params.minRating = currentMinRating;
         if (searchQuery) params.search = searchQuery;
+        if (currentSection) params.section = currentSection;
+        if (isFeaturedFilter) params.featured = 'true';
+        if (isBestsellerFilter) params.bestseller = 'true';
+        if (isTrendingFilter) params.trending = 'true';
+        if (isDiscountFilter) params.discount = 'true';
+        if (isSelectFilter) params.select = 'true';
 
         // Dynamic attribute map
         if (Object.keys(currentDynamicAttrs).length > 0) {
@@ -129,7 +155,9 @@ export function ProductListingPage() {
     } else {
       newParams.set(key, String(value));
     }
-    newParams.set('page', '1'); // Reset to page 1 on filter modification
+    if (key !== 'page') {
+      newParams.set('page', '1'); // Reset to page 1 only on filter modification, NOT on page change
+    }
     setSearchParams(newParams);
   };
 
@@ -221,7 +249,7 @@ export function ProductListingPage() {
 
   // Active filter count calculation
   let activeFilterCount = 0;
-  if (selectedCategoryObj) activeFilterCount++;
+  if (!categorySlug && selectedCategoryObj) activeFilterCount++;
   activeFilterCount += currentBrands.length;
   if (currentMinPrice) activeFilterCount++;
   if (currentMaxPrice) activeFilterCount++;
@@ -229,20 +257,59 @@ export function ProductListingPage() {
   if (currentMinRating) activeFilterCount++;
   activeFilterCount += Object.values(currentDynamicAttrs).reduce((acc, arr) => acc + arr.length, 0);
 
+  const pageTitle = (() => {
+    if (selectedCategoryObj) return selectedCategoryObj.name;
+    if (searchQuery) return `Search Results for "${searchQuery}"`;
+    if (currentBrands.length === 1) {
+      return brands.find((b) => b.slug === currentBrands[0] || b._id === currentBrands[0])?.name || currentBrands[0];
+    }
+    if (currentSection === 'bestsellers' || isBestsellerFilter) return 'Bestselling Icons';
+    if (currentSection === 'trending' || isTrendingFilter) return 'Trending Right Now';
+    if (currentSection === 'featured' || isFeaturedFilter) return 'Featured Collection';
+    if (currentSection === 'most_loved') return 'Most Loved & Top Rated';
+    if (currentSection === 'whats_new') return "What's New & Fresh Drops";
+    if (currentSection === 'offers_deals' || isDiscountFilter) return 'Offers & Exclusive Deals';
+    if (currentSection === 'mosmac_select' || isSelectFilter) return 'MOSMAC Select';
+    if (currentSection) return currentSection.replace(/_/g, ' ');
+    return 'All Products';
+  })();
+
+  const pageDescription = (() => {
+    if (selectedCategoryObj?.description) return selectedCategoryObj.description;
+    if (currentBrands.length === 1) {
+      const bName = brands.find((b) => b.slug === currentBrands[0] || b._id === currentBrands[0])?.name || currentBrands[0];
+      return `Explore the latest authentic collection from ${bName} with 100% genuine warranty and express delivery.`;
+    }
+    if (currentSection === 'bestsellers' || isBestsellerFilter) {
+      return 'Our most-purchased, highly reviewed formulas that never disappoint.';
+    }
+    if (currentSection === 'trending' || isTrendingFilter) {
+      return 'Handpicked beauty essentials trending across India this week.';
+    }
+    if (currentSection === 'featured' || isFeaturedFilter) {
+      return 'Handcrafted formulas, dermatologically tested and certified genuine.';
+    }
+    if (currentSection === 'most_loved') {
+      return 'Customer favorites backed by genuine, verified 5-star reviews.';
+    }
+    if (currentSection === 'offers_deals' || isDiscountFilter) {
+      return 'Premium beauty and cosmetic essentials at special discounted prices.';
+    }
+    if (currentSection === 'mosmac_select' || isSelectFilter) {
+      return 'Handpicked signature selections and certified luxury cosmetic picks.';
+    }
+    return 'Discover verified quality items with fast pan-India delivery and easy returns.';
+  })();
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
       <SeoHead
         title={
           searchQuery
-            ? `Search: "${searchQuery}" | Aura`
-            : selectedCategoryObj?.name
-            ? `${selectedCategoryObj.name} | Aura`
-            : 'All Products | Aura Catalogue'
+            ? `Search: "${searchQuery}" | Mosmac`
+            : `${pageTitle} | Mosmac`
         }
-        description={
-          selectedCategoryObj?.description ||
-          `Browse the latest collection in ${selectedCategoryObj?.name || 'our catalogue'} with cash on delivery and fast shipping.`
-        }
+        description={pageDescription}
         canonicalUrl={categorySlug ? `/category/${categorySlug}` : '/products'}
         robots={searchQuery || activeFilterCount > 0 ? 'noindex, follow' : 'index, follow'}
       />
@@ -268,21 +335,75 @@ export function ProductListingPage() {
             <span className="font-semibold text-gray-900">Search: "{searchQuery}"</span>
           </>
         )}
+        {!selectedCategoryObj && !searchQuery && currentBrands.length === 1 && (
+          <>
+            <ChevronRight className="w-3.5 h-3.5" />
+            <Link to="/brands" className="hover:text-gray-900">
+              Brands
+            </Link>
+            <ChevronRight className="w-3.5 h-3.5" />
+            <span className="font-semibold text-gray-900 capitalize">
+              {brands.find((b) => b.slug === currentBrands[0] || b._id === currentBrands[0])?.name || currentBrands[0]}
+            </span>
+          </>
+        )}
+        {!selectedCategoryObj && !searchQuery && currentBrands.length === 0 && (currentSection || isBestsellerFilter || isTrendingFilter || isFeaturedFilter || isDiscountFilter || isSelectFilter) && (
+          <>
+            <ChevronRight className="w-3.5 h-3.5" />
+            <span className="font-semibold text-gray-900 capitalize">
+              {currentSection === 'bestsellers' || isBestsellerFilter
+                ? 'Bestsellers'
+                : currentSection === 'trending' || isTrendingFilter
+                ? 'Trending Now'
+                : currentSection === 'featured' || isFeaturedFilter
+                ? 'Featured'
+                : currentSection === 'most_loved'
+                ? 'Most Loved'
+                : currentSection === 'whats_new'
+                ? "What's New"
+                : currentSection === 'offers_deals' || isDiscountFilter
+                ? 'Offers & Deals'
+                : currentSection === 'mosmac_select' || isSelectFilter
+                ? 'MOSMAC Select'
+                : currentSection.replace(/_/g, ' ')}
+            </span>
+          </>
+        )}
       </nav>
 
-      {/* Category Banner / Heading */}
+      {/* Brand Hero Showcase with 3D Infinite Spiral */}
+      {!searchQuery && currentBrands.length === 1 && (
+        <BrandHeroShowcase
+          brand={
+            brands.find((b) => b.slug === currentBrands[0] || b._id === currentBrands[0]) || {
+              name: currentBrands[0],
+              slug: currentBrands[0]
+            }
+          }
+          products={products}
+          categories={categories}
+          selectedCategory={currentCategorySlug}
+          onSelectCategory={(catSlug) => {
+            const nextParams = new URLSearchParams(searchParams);
+            if (catSlug) {
+              nextParams.set('category', catSlug);
+            } else {
+              nextParams.delete('category');
+            }
+            nextParams.set('page', '1');
+            setSearchParams(nextParams);
+          }}
+        />
+      )}
+
+      {/* Category / Brand / Section Banner / Heading */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-gray-100 pb-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight">
-            {selectedCategoryObj
-              ? selectedCategoryObj.name
-              : searchQuery
-              ? `Search Results for "${searchQuery}"`
-              : 'All Products'}
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight capitalize">
+            {pageTitle}
           </h1>
           <p className="text-xs sm:text-sm text-gray-500 mt-1">
-            {selectedCategoryObj?.description ||
-              `Discover verified quality items with fast pan-India delivery and easy returns.`}
+            {pageDescription}
           </p>
         </div>
 
@@ -326,7 +447,7 @@ export function ProductListingPage() {
         <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
           <span className="text-gray-400 font-medium">Applied:</span>
 
-          {selectedCategoryObj && (
+          {!categorySlug && selectedCategoryObj && (
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 font-medium">
               Category: {selectedCategoryObj.name}
               <button
@@ -432,13 +553,14 @@ export function ProductListingPage() {
       )}
 
       {/* Main Grid: Sidebar + Product Cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-        {/* Desktop Filter Sidebar */}
-        <div className="hidden lg:block lg:col-span-1">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 items-start">
+        {/* Desktop Filter Sidebar (Sticky on Scroll) */}
+        <div className="hidden lg:block lg:col-span-1 sticky top-20 max-h-[calc(100vh-5.5rem)] overflow-y-auto pr-2 scrollbar-none">
           <FilterSidebar
             categories={categories}
             brands={brands}
             selectedCategory={selectedCategoryObj}
+            showCategoryFilter={true}
             onCategorySelect={handleCategorySelect}
             selectedBrands={currentBrands}
             onBrandToggle={handleBrandToggle}
@@ -490,30 +612,17 @@ export function ProductListingPage() {
 
           {/* Pagination Controls */}
           {pagination.totalPages > 1 && (
-            <div className="pt-6 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+            <div className="pt-8 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-gray-500">
               <div>
-                Page <strong className="text-gray-900">{pagination.page}</strong> of{' '}
-                <strong className="text-gray-900">{pagination.totalPages}</strong>
+                Showing Page <strong className="text-gray-900">{pagination.page}</strong> of{' '}
+                <strong className="text-gray-900">{pagination.totalPages}</strong> ({pagination.total} products)
               </div>
 
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={currentPage <= 1}
-                  onClick={() => updateQueryParam('page', currentPage - 1)}
-                >
-                  <ChevronLeft className="w-4 h-4 mr-1" /> Previous
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={currentPage >= pagination.totalPages}
-                  onClick={() => updateQueryParam('page', currentPage + 1)}
-                >
-                  Next <ChevronRight className="w-4 h-4 ml-1" />
-                </Button>
-              </div>
+              <Pagination
+                totalPages={pagination.totalPages}
+                value={currentPage}
+                onChange={(newPage) => updateQueryParam('page', newPage)}
+              />
             </div>
           )}
         </div>
@@ -532,6 +641,7 @@ export function ProductListingPage() {
                 categories={categories}
                 brands={brands}
                 selectedCategory={selectedCategoryObj}
+                showCategoryFilter={true}
                 onCategorySelect={handleCategorySelect}
                 selectedBrands={currentBrands}
                 onBrandToggle={handleBrandToggle}

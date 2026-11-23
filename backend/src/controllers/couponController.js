@@ -4,6 +4,48 @@ import { ApiError } from '../utils/ApiError.js';
 import { sendSuccess } from '../utils/responseFormatter.js';
 import { HTTP_STATUS } from '../constants/httpStatusCodes.js';
 
+export async function getPublicActiveCoupons(req, res, next) {
+  try {
+    const now = new Date();
+    const coupons = await Coupon.find({
+      isActive: true,
+      startDate: { $lte: now },
+      endDate: { $gte: now }
+    })
+      .select('code description discountType discountValue maxDiscountAmount minOrderAmount')
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .lean();
+
+    const formatted = coupons.map((c) => {
+      let discountText = '';
+      if (c.description && c.description.trim()) {
+        discountText = c.description.trim();
+      } else if (c.discountType === 'percentage') {
+        discountText = `up to ${c.discountValue}% off`;
+        if (c.maxDiscountAmount) {
+          discountText += ` up to ₹${Math.round(c.maxDiscountAmount / 100)}`;
+        }
+      } else {
+        discountText = `up to ₹${Math.round(c.discountValue / 100 || c.discountValue)} off`;
+      }
+      return {
+        _id: c._id,
+        code: c.code,
+        text: `Use ${c.code} for ${discountText}`,
+        discountText,
+        description: c.description || '',
+        discountType: c.discountType,
+        discountValue: c.discountValue
+      };
+    });
+
+    return sendSuccess(res, HTTP_STATUS.OK, 'Active coupons retrieved', { offers: formatted });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function validateCoupon(req, res, next) {
   try {
     const { code, subtotal } = req.body;
@@ -168,6 +210,7 @@ export async function deleteCoupon(req, res, next) {
 }
 
 export default {
+  getPublicActiveCoupons,
   validateCoupon,
   getAdminCoupons,
   createCoupon,

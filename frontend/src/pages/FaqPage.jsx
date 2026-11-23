@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { cmsService } from '../services/cmsService';
 import {
   HelpCircle,
   Search,
@@ -10,36 +9,92 @@ import {
   Mail,
   Home,
   ChevronRight,
-  Phone
+  ShieldCheck,
+  Truck,
+  RotateCcw,
+  CreditCard
 } from 'lucide-react';
-import LoadingSpinner from '../components/common/LoadingSpinner';
 import { SeoHead, buildFaqSchema } from '../components/common/SeoHead';
 
+const HARDCODED_FAQS = {
+  'Orders & Tracking': [
+    {
+      _id: 'faq-1',
+      question: 'How do I track my order?',
+      answer: 'You can track your shipment status in real-time by visiting our "Track Order" page using your Order ID and registered phone number/email, or directly from your Account Dashboard under My Orders.'
+    },
+    {
+      _id: 'faq-2',
+      question: 'Can I cancel my order after placing it?',
+      answer: 'Yes, orders can be cancelled anytime before dispatch directly from your Account Orders page. Once dispatched, you can initiate a hassle-free return or refuse delivery upon arrival.'
+    },
+    {
+      _id: 'faq-3',
+      question: 'How do I know if my order is confirmed?',
+      answer: 'As soon as your payment is processed, you will receive an immediate confirmation email and SMS containing your unique 8-character Order ID and comprehensive invoice breakdown.'
+    }
+  ],
+  'Shipping & Delivery': [
+    {
+      _id: 'faq-4',
+      question: 'How fast do you deliver across India?',
+      answer: 'We dispatch all confirmed orders via air express for metro locations (1 to 3 business days) and surface express for non-metro areas (3 to 5 business days).'
+    },
+    {
+      _id: 'faq-5',
+      question: 'What are the delivery charges?',
+      answer: 'Express shipping is 100% FREE on all orders of ₹999 or above. For orders under ₹999, a flat nominal delivery fee of ₹70 is applied at checkout.'
+    },
+    {
+      _id: 'faq-6',
+      question: 'Do you deliver to my pincode?',
+      answer: 'We cover over 19,000+ pincodes across all Indian states and Union Territories via premier logistics partners including Blue Dart, Delhivery, and Xpressbees.'
+    }
+  ],
+  'Payments & COD': [
+    {
+      _id: 'faq-7',
+      question: 'Which payment methods do you accept?',
+      answer: 'We accept all major UPI apps (Google Pay, PhonePe, Paytm, CRED), Credit/Debit cards (Visa, Mastercard, RuPay, Amex), Net Banking across 50+ banks, and Cash on Delivery (COD) on eligible items.'
+    },
+    {
+      _id: 'faq-8',
+      question: 'Is online payment secure on MOSMAC?',
+      answer: 'Yes, 100%. All online transactions are protected with bank-grade 256-bit SSL encryption and processed through RBI-approved, PCI-DSS Level 1 certified payment gateways.'
+    },
+    {
+      _id: 'faq-9',
+      question: 'When will I receive my refund for a returned order?',
+      answer: 'Prepaid refunds are initiated immediately upon warehouse quality check and typically reflect in your source account within 3-5 business days. COD refunds are paid directly via UPI or NEFT.'
+    }
+  ],
+  'Returns & Warranty': [
+    {
+      _id: 'faq-10',
+      question: 'What is MOSMAC’s return and replacement policy?',
+      answer: 'We provide a 7-day doorstep replacement and return window for any defective, damaged in transit, or incorrectly delivered products. You can raise a request with photos via your Orders page.'
+    },
+    {
+      _id: 'faq-11',
+      question: 'Do products come with manufacturer warranty?',
+      answer: 'Yes, all products sold on MOSMAC come with 100% genuine official manufacturer warranty (typically 1 to 2 years depending on the brand and model) redeemable at any brand authorized service center nationwide.'
+    }
+  ],
+  'Authenticity Guarantee': [
+    {
+      _id: 'faq-12',
+      question: 'Are all products 100% original and authentic?',
+      answer: 'Guaranteed. MOSMAC partners directly with authorized brand manufacturers and certified flagship beauty suppliers. Every product is 100% authentic, dermatologically tested, sealed in manufacturer retail packaging, and shipped with GST invoices.'
+    }
+  ]
+};
+
 export function FaqPage() {
-  const [groupedFaqs, setGroupedFaqs] = useState({});
   const [activeCategory, setActiveCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [openItems, setOpenItems] = useState({});
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
 
-  useEffect(() => {
-    async function loadFaqs() {
-      try {
-        setLoading(true);
-        setError(null);
-        const res = await cmsService.getFaqs();
-        setGroupedFaqs(res.grouped || {});
-      } catch (err) {
-        setError(err.message || 'Failed to load FAQs');
-      } finally {
-        setLoading(false);
-      }
-    }
-    loadFaqs();
-  }, []);
-
-  const categories = Object.keys(groupedFaqs);
+  const categories = Object.keys(HARDCODED_FAQS);
 
   const toggleItem = (id) => {
     setOpenItems((prev) => ({
@@ -48,170 +103,209 @@ export function FaqPage() {
     }));
   };
 
-  // Filter questions based on activeCategory and searchQuery
   const filteredCategories = categories.filter((cat) => {
     if (activeCategory !== 'all' && cat !== activeCategory) return false;
     return true;
   });
 
-  const allFaqsList = Object.values(groupedFaqs).flat();
+  const allFaqsList = Object.values(HARDCODED_FAQS).flat();
+  const searchResults = searchQuery.trim()
+    ? allFaqsList.filter(
+        (faq) =>
+          faq.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          faq.answer.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : null;
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-12 space-y-8">
       <SeoHead
-        title="Frequently Asked Questions (FAQ) | Aura"
-        description="Find answers to common questions about orders, shipping, payment methods, delivery PIN codes, and 7-day returns."
+        title="Frequently Asked Questions (FAQ) | MOSMAC Support"
+        description="Find instant answers to questions regarding order tracking, shipping speeds, returns, warranties, and payment methods on MOSMAC."
         canonicalUrl="/faqs"
-        jsonLd={allFaqsList.length > 0 ? buildFaqSchema(allFaqsList) : null}
+        jsonLd={buildFaqSchema(allFaqsList)}
       />
 
       {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-xs text-gray-400">
-        <Link to="/" className="hover:text-gray-700 flex items-center gap-1">
+      <nav className="flex items-center space-x-2 text-xs text-gray-400">
+        <Link to="/" className="hover:text-gray-700 flex items-center gap-1 transition-colors">
           <Home className="w-3.5 h-3.5" />
           Home
         </Link>
-        <ChevronRight className="w-3 h-3" />
-        <span className="font-semibold text-gray-800">Frequently Asked Questions</span>
+        <ChevronRight className="w-3.5 h-3.5" />
+        <span className="text-gray-700 font-medium">Customer Support & FAQs</span>
       </nav>
 
-      {/* Header */}
+      {/* Header Banner */}
       <div className="text-center space-y-3">
-        <div className="inline-flex p-3 bg-blue-50 text-blue-600 rounded-full mb-1">
-          <HelpCircle className="w-8 h-8" />
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold">
+          <HelpCircle className="w-4 h-4" />
+          Self-Service Help Center
         </div>
-        <h1 className="text-3xl sm:text-4xl font-extrabold text-gray-900 tracking-tight">
+        <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">
           How can we help you?
         </h1>
-        <p className="text-sm sm:text-base text-gray-600 max-w-xl mx-auto">
-          Find instant answers to common questions about shipping, delivery timelines, payment gateways, and return policies.
+        <p className="text-sm text-gray-500 max-w-lg mx-auto">
+          Quick, verified answers to common questions about orders, express shipping, warranty claims, and returns.
         </p>
 
         {/* Search Bar */}
-        <div className="max-w-lg mx-auto pt-4">
+        <div className="max-w-md mx-auto pt-2">
           <div className="relative">
-            <Search className="w-5 h-5 absolute left-3.5 top-3 text-gray-400" />
+            <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-3.5" />
             <input
               type="text"
+              placeholder="Search by keyword (e.g., tracking, refund, warranty)..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by keyword (e.g. tracking, returns, COD)..."
-              className="w-full pl-11 pr-4 py-3 rounded-xl border border-gray-300 shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full pl-10 pr-4 py-2.5 text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-2xs transition-all"
             />
           </div>
         </div>
       </div>
 
       {/* Category Pills */}
-      {categories.length > 0 && (
-        <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+      {!searchQuery && (
+        <div className="flex items-center justify-center flex-wrap gap-2 pt-2">
           <button
+            type="button"
             onClick={() => setActiveCategory('all')}
-            className={`px-4 py-2 rounded-full text-xs font-semibold transition ${
+            className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
               activeCategory === 'all'
-                ? 'bg-blue-600 text-white shadow-sm'
+                ? 'bg-gray-900 text-white shadow-xs'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
           >
-            All Questions
+            All Questions ({allFaqsList.length})
           </button>
-          {categories.map((cat) => (
+          {categories.map((category) => (
             <button
-              key={cat}
-              onClick={() => setActiveCategory(cat)}
-              className={`px-4 py-2 rounded-full text-xs font-semibold transition ${
-                activeCategory === cat
-                  ? 'bg-blue-600 text-white shadow-sm'
+              key={category}
+              type="button"
+              onClick={() => setActiveCategory(category)}
+              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+                activeCategory === category
+                  ? 'bg-gray-900 text-white shadow-xs'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              {cat}
+              {category}
             </button>
           ))}
         </div>
       )}
 
-      {/* Content */}
-      {loading ? (
-        <div className="py-12 flex flex-col items-center justify-center">
-          <LoadingSpinner size="lg" />
-          <p className="text-sm text-gray-500 mt-2">Loading customer questions...</p>
-        </div>
-      ) : categories.length === 0 ? (
-        <div className="text-center py-12 text-gray-500 text-sm">
-          No FAQs currently published. Please check back shortly or reach out to our customer care.
-        </div>
-      ) : (
-        <div className="space-y-8">
-          {filteredCategories.map((category) => {
-            const rawFaqs = groupedFaqs[category] || [];
-            const matchingFaqs = rawFaqs.filter((f) => {
-              if (!searchQuery.trim()) return true;
-              const q = searchQuery.toLowerCase();
-              return f.question.toLowerCase().includes(q) || f.answer.toLowerCase().includes(q);
-            });
-
-            if (matchingFaqs.length === 0) return null;
+      {/* FAQ Accordion List */}
+      <div className="space-y-6">
+        {searchResults ? (
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-gray-700">
+              Search Results ({searchResults.length})
+            </h3>
+            {searchResults.length === 0 ? (
+              <div className="p-8 text-center bg-gray-50 rounded-2xl border border-gray-100 space-y-2">
+                <HelpCircle className="w-8 h-8 text-gray-300 mx-auto" />
+                <p className="text-sm text-gray-600 font-medium">No answers match your query</p>
+                <p className="text-xs text-gray-400">
+                  Try searching with different terms or reach out directly to our support team.
+                </p>
+              </div>
+            ) : (
+              searchResults.map((faq) => (
+                <div
+                  key={faq._id}
+                  className="bg-white border border-gray-200/80 rounded-xl overflow-hidden shadow-2xs transition-all"
+                >
+                  <button
+                    type="button"
+                    onClick={() => toggleItem(faq._id)}
+                    className="w-full text-left px-5 py-4 flex items-center justify-between gap-4 font-semibold text-sm text-gray-900 hover:bg-gray-50 transition-colors"
+                  >
+                    <span>{faq.question}</span>
+                    {openItems[faq._id] ? (
+                      <ChevronUp className="w-4 h-4 text-gray-400 shrink-0" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
+                    )}
+                  </button>
+                  {openItems[faq._id] && (
+                    <div className="px-5 pb-4 pt-1 text-xs sm:text-sm text-gray-600 leading-relaxed border-t border-gray-50 bg-gray-50/40">
+                      {faq.answer}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        ) : (
+          filteredCategories.map((category) => {
+            const rawFaqs = HARDCODED_FAQS[category] || [];
+            if (rawFaqs.length === 0) return null;
 
             return (
               <div key={category} className="space-y-3">
-                <h2 className="text-lg font-bold text-gray-900 border-b border-gray-200 pb-2">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-gray-700 flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                   {category}
-                </h2>
-                <div className="divide-y divide-gray-200 rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">
-                  {matchingFaqs.map((faq) => {
-                    const isOpen = openItems[faq._id];
-                    return (
-                      <div key={faq._id} className="transition-colors">
-                        <button
-                          onClick={() => toggleItem(faq._id)}
-                          className="w-full py-4 px-5 text-left flex items-center justify-between gap-4 font-semibold text-gray-900 hover:bg-gray-50 transition"
-                        >
-                          <span className="text-sm sm:text-base leading-snug">{faq.question}</span>
-                          {isOpen ? (
-                            <ChevronUp className="w-5 h-5 text-blue-600 shrink-0" />
-                          ) : (
-                            <ChevronDown className="w-5 h-5 text-gray-400 shrink-0" />
-                          )}
-                        </button>
-                        {isOpen && (
-                          <div className="px-5 pb-5 pt-1 text-sm text-gray-600 whitespace-pre-line leading-relaxed bg-gray-50/50">
-                            {faq.answer}
-                          </div>
+                </h3>
+
+                <div className="space-y-2.5">
+                  {rawFaqs.map((faq) => (
+                    <div
+                      key={faq._id}
+                      className="bg-white border border-gray-200/80 rounded-xl overflow-hidden shadow-2xs transition-all"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => toggleItem(faq._id)}
+                        className="w-full text-left px-5 py-4 flex items-center justify-between gap-4 font-semibold text-sm text-gray-900 hover:bg-gray-50 transition-colors"
+                      >
+                        <span>{faq.question}</span>
+                        {openItems[faq._id] ? (
+                          <ChevronUp className="w-4 h-4 text-emerald-600 shrink-0" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
                         )}
-                      </div>
-                    );
-                  })}
+                      </button>
+                      {openItems[faq._id] && (
+                        <div className="px-5 pb-4 pt-1 text-xs sm:text-sm text-gray-600 leading-relaxed border-t border-gray-50 bg-gray-50/40">
+                          {faq.answer}
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
             );
-          })}
-        </div>
-      )}
+          })
+        )}
+      </div>
 
-      {/* Support Card */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl p-6 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-6">
+      {/* Still need help footer box */}
+      <div className="bg-slate-900 text-white rounded-2xl p-6 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-6 shadow-md">
         <div className="space-y-1 text-center sm:text-left">
-          <h3 className="text-lg font-bold text-gray-900">Still have questions?</h3>
-          <p className="text-sm text-gray-600">
-            Can’t find what you’re looking for? Our customer support desk is ready to assist.
+          <h4 className="text-base font-bold text-white flex items-center justify-center sm:justify-start gap-2">
+            <ShieldCheck className="w-5 h-5 text-emerald-400" />
+            Still have questions?
+          </h4>
+          <p className="text-xs text-slate-300">
+            Our customer care specialists are available Mon–Sat from 9:00 AM to 8:00 PM IST.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <a
-            href="mailto:support@aurora.in"
-            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition shadow-sm"
+
+        <div className="flex items-center gap-3 shrink-0">
+          <Link
+            to="/contact"
+            className="px-4 py-2 text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl transition-colors shadow-2xs"
           >
-            <Mail className="w-4 h-4 mr-2" />
-            Email Support
-          </a>
-          <a
-            href="tel:+919876543210"
-            className="inline-flex items-center px-4 py-2 border border-blue-200 bg-white text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-50 transition"
+            Contact Support
+          </Link>
+          <Link
+            to="/track-order"
+            className="px-4 py-2 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl transition-colors border border-slate-700"
           >
-            <Phone className="w-4 h-4 mr-2" />
-            Call Helpdesk
-          </a>
+            Track My Order
+          </Link>
         </div>
       </div>
     </div>

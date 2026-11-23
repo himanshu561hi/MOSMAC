@@ -251,3 +251,30 @@ export async function updateStoreSettings(req, res, next) {
     next(error);
   }
 }
+
+export async function getWhatsNewData(req, res, next) {
+  try {
+    const data = await cmsService.getWhatsNewData();
+    return sendSuccess(res, HTTP_STATUS.OK, "What's New data retrieved", data);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getAdminWhatsNewConfig(req, res, next) {
+  try {
+    const config = await cmsService.getAdminWhatsNewConfig();
+    return sendSuccess(res, HTTP_STATUS.OK, "What's New page config retrieved", { config });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function updateAdminWhatsNewConfig(req, res, next) {
+  try {
+    const config = await cmsService.updateAdminWhatsNewConfig(req.body, req.user);
+    return sendSuccess(res, HTTP_STATUS.OK, "What's New page config updated", { config });
+  } catch (error) {
+    next(error);
+  }
+}

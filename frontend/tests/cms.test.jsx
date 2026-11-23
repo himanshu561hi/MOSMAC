@@ -10,10 +10,8 @@ import cmsReducer from '@/store/slices/cmsSlice';
 import AdminCmsDashboardPage from '@/pages/admin/AdminCmsDashboardPage';
 import AdminHomepageBuilderPage from '@/pages/admin/AdminHomepageBuilderPage';
 import AdminBannersPage from '@/pages/admin/AdminBannersPage';
-import AdminPagesPage from '@/pages/admin/AdminPagesPage';
-import AdminFaqsPage from '@/pages/admin/AdminFaqsPage';
+import AdminWhatsNewPage from '@/pages/admin/AdminWhatsNewPage';
 import AdminReviewsPage from '@/pages/admin/AdminReviewsPage';
-import AdminNavigationPage from '@/pages/admin/AdminNavigationPage';
 import AdminSettingsPage from '@/pages/admin/AdminSettingsPage';
 import AdminTemplatesPage from '@/pages/admin/AdminTemplatesPage';
 import AdminMediaLibraryPage from '@/pages/admin/AdminMediaLibraryPage';
@@ -199,7 +197,15 @@ vi.mock('@/services/cmsService', () => ({
       pagination: { page: 1, total: 1, pages: 1 }
     }),
     recordMediaAsset: vi.fn().mockResolvedValue({ _id: 'asset-new' }),
-    deleteMediaAsset: vi.fn().mockResolvedValue({ success: true })
+    deleteMediaAsset: vi.fn().mockResolvedValue({ success: true }),
+    getAdminWhatsNewConfig: vi.fn().mockResolvedValue({
+      heroBanner: { enabled: true, title: 'THE TECH & LIFESTYLE SCENE' },
+      newBrands: { enabled: true, title: 'New Brands On MOSMAC' },
+      justDropped: { enabled: true, title: 'Just Dropped' },
+      onlyOnMosmac: { enabled: true, title: 'Only On MOSMAC' },
+      trendingNow: { enabled: true, title: 'Trending Now' }
+    }),
+    updateAdminWhatsNewConfig: vi.fn().mockResolvedValue({ success: true })
   }
 }));
 
@@ -284,11 +290,9 @@ describe('Phase 8 — CMS, Content & Storefront Customization Frontend Suite', (
 
     expect(screen.getByText('Content Management System (CMS)')).toBeInTheDocument();
     expect(screen.getByText('Homepage Builder')).toBeInTheDocument();
+    expect(screen.getByText('"What\'s New" Page Manager')).toBeInTheDocument();
     expect(screen.getByText('Hero & Promo Banners')).toBeInTheDocument();
-    expect(screen.getByText('Content Pages & Policies')).toBeInTheDocument();
-    expect(screen.getByText('Product Reviews & Moderation')).toBeInTheDocument();
-    expect(screen.getByText('Frequently Asked Questions')).toBeInTheDocument();
-    expect(screen.getByText('Navigation & Menu Bar')).toBeInTheDocument();
+    expect(screen.getByText('Store Settings & Policies')).toBeInTheDocument();
     expect(screen.getByText('Email & Notification Templates')).toBeInTheDocument();
     expect(screen.getByText('Media Asset Library')).toBeInTheDocument();
   });
@@ -322,30 +326,13 @@ describe('Phase 8 — CMS, Content & Storefront Customization Frontend Suite', (
     expect(screen.getByText('Desktop Image URL *')).toBeInTheDocument();
   });
 
-  it('4. AdminPagesPage lists content pages and opens revisions modal', async () => {
-    renderWithProviders(<AdminPagesPage />);
+  it('4. AdminWhatsNewPage renders section cards and configuration options', async () => {
+    renderWithProviders(<AdminWhatsNewPage />);
 
     await waitFor(() => {
-      expect(screen.getByText('Content Pages & Legal Policies')).toBeInTheDocument();
-      expect(screen.getByText('Return & Refund Policy')).toBeInTheDocument();
-    });
-
-    // Click revisions button
-    const revisionsBtn = screen.getByRole('button', { name: /1 revisions/i });
-    fireEvent.click(revisionsBtn);
-
-    await waitFor(() => {
-      expect(screen.getByText('Revision History')).toBeInTheDocument();
-      expect(screen.getByText('Initial policy draft')).toBeInTheDocument();
-    });
-  });
-
-  it('5. AdminFaqsPage renders FAQ list and filters by category', async () => {
-    renderWithProviders(<AdminFaqsPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText('Frequently Asked Questions (FAQ)')).toBeInTheDocument();
-      expect(screen.getByText('How fast do you deliver across India?')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /What's New/i })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: /Back to CMS Hub/i })).toBeInTheDocument();
+      expect(screen.getAllByRole('button', { name: /Save Configuration/i }).length).toBeGreaterThanOrEqual(1);
     });
   });
 
@@ -366,13 +353,12 @@ describe('Phase 8 — CMS, Content & Storefront Customization Frontend Suite', (
     });
   });
 
-  it('7. AdminNavigationPage allows managing header links and footer columns', async () => {
-    renderWithProviders(<AdminNavigationPage />);
+  it('7. AdminWhatsNewPage allows toggling section checkboxes', async () => {
+    renderWithProviders(<AdminWhatsNewPage />);
 
     await waitFor(() => {
-      expect(screen.getByText('Navigation & Menus')).toBeInTheDocument();
-      expect(screen.getByText('Header Navigation Menu')).toBeInTheDocument();
-      expect(screen.getByText('Footer Columns & Links')).toBeInTheDocument();
+      expect(screen.getByText(/Hero Promotional Banner/i)).toBeInTheDocument();
+      expect(screen.getByText(/Just Dropped/i)).toBeInTheDocument();
     });
   });
 
@@ -455,6 +441,8 @@ describe('Phase 8 — CMS, Content & Storefront Customization Frontend Suite', (
     const questionBtn = screen.getByText('How fast do you deliver across India?');
     fireEvent.click(questionBtn);
 
-    expect(screen.getByText(/dispatch all confirmed orders via air express/i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText(/dispatch all confirmed orders via air express/i)).toBeInTheDocument();
+    });
   });
 });

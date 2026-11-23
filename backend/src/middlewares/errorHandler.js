@@ -38,11 +38,14 @@ export function errorHandler(err, req, res, next) {
       field: e.path.join('.'),
       message: e.message
     }));
+    const summaryMsg = details.length > 0
+      ? `Validation failed: ${details.map((d) => (d.field ? `${d.field}: ${d.message}` : d.message)).join(', ')}`
+      : 'Validation failed for incoming request data';
     return sendError(
       res,
       HTTP_STATUS.UNPROCESSABLE_ENTITY,
       ERROR_CODES.VALIDATION_ERROR,
-      'Validation failed for incoming request data',
+      summaryMsg,
       details,
       requestId
     );

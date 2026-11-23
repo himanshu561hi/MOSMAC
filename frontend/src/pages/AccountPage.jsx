@@ -1,15 +1,43 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import { logout } from '@/store/slices/authSlice';
 import { authService } from '@/features/auth/authService';
 import Button from '@/components/common/Button';
 import Input from '@/components/common/Input';
 import Alert from '@/components/common/Alert';
-import { User as UserIcon, Shield, KeyRound, LogOut, CheckCircle2, AlertCircle, ShoppingBag } from 'lucide-react';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
+import {
+  User as UserIcon,
+  Shield,
+  KeyRound,
+  LogOut,
+  CheckCircle2,
+  AlertCircle,
+  ShoppingBag,
+  Package,
+  Calendar,
+  ChevronRight,
+  Truck,
+  ArrowRight,
+  Clock,
+  XCircle,
+  CreditCard,
+  Banknote
+} from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { formatCurrency, formatDate } from '@/utils/formatters';
+import { fetchCustomerOrders } from '@/store/slices/orderSlice';
+
+const STATUS_TABS = [
+  { id: '', label: 'All Orders' },
+  { id: 'confirmed', label: 'Confirmed' },
+  { id: 'shipped', label: 'Shipped' },
+  { id: 'delivered', label: 'Delivered' },
+  { id: 'cancelled', label: 'Cancelled' }
+];
 
 const changePasswordSchema = z
   .object({
@@ -29,14 +57,45 @@ const changePasswordSchema = z
     path: ['confirmPassword']
   });
 
-export function AccountPage() {
+export function AccountPage({ defaultTab }) {
   const dispatch = useDispatch();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useSelector((state) => state.auth);
+  const { orders, total, page, totalPages, loading: ordersLoading, error: ordersError } = useSelector((state) => state.orders);
 
-  const [activeTab, setActiveTab] = useState('profile');
+  const initialTab = defaultTab || searchParams.get('tab') || 'profile';
+  const [activeTab, setActiveTabState] = useState(initialTab);
   const [passwordSuccess, setPasswordSuccess] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [isLoggingOutAll, setIsLoggingOutAll] = useState(false);
+
+  // Orders tab state
+  const [selectedStatus, setSelectedStatus] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const handleTabChange = (tab) => {
+    setActiveTabState(tab);
+    setSearchParams({ tab });
+  };
+
+  useEffect(() => {
+    const tabParam = defaultTab || searchParams.get('tab');
+    if (tabParam && tabParam !== activeTab) {
+      setActiveTabState(tabParam);
+    }
+  }, [searchParams, defaultTab]);
+
+  useEffect(() => {
+    if (activeTab === 'orders') {
+      dispatch(
+        fetchCustomerOrders({
+          page: currentPage,
+          limit: 10,
+          status: selectedStatus || undefined
+        })
+      );
+    }
+  }, [dispatch, activeTab, currentPage, selectedStatus]);
 
   const {
     register,
@@ -75,6 +134,47 @@ export function AccountPage() {
     }
   };
 
+  const getStatusBadge = (status) => {
+    switch (status) {
+      case 'confirmed':
+        return (
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-full border border-blue-200">
+            <Clock className="w-3 h-3" /> Confirmed
+          </span>
+        );
+      case 'processing':
+        return (
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-full border border-indigo-200">
+            <Package className="w-3 h-3" /> Processing
+          </span>
+        );
+      case 'shipped':
+        return (
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200">
+            <Truck className="w-3 h-3" /> Shipped
+          </span>
+        );
+      case 'delivered':
+        return (
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+            <CheckCircle2 className="w-3 h-3" /> Delivered
+          </span>
+        );
+      case 'cancelled':
+        return (
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-700 bg-rose-50 px-2.5 py-1 rounded-full border border-rose-200">
+            <XCircle className="w-3 h-3" /> Cancelled
+          </span>
+        );
+      default:
+        return (
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-gray-700 bg-gray-100 px-2.5 py-1 rounded-full">
+            {status}
+          </span>
+        );
+    }
+  };
+
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
       {/* Account Header */}
@@ -104,12 +204,12 @@ export function AccountPage() {
         </Button>
       </div>
 
-      {/* Tabs */}
+      {/* Persistent Tabs: Stays visible across Profile, Security, and Orders */}
       <div className="flex border-b border-gray-200 gap-4 text-sm font-medium">
         <button
           type="button"
-          onClick={() => setActiveTab('profile')}
-          className={`pb-3 px-1 border-b-2 flex items-center gap-2 transition-colors ${
+          onClick={() => handleTabChange('profile')}
+          className={`pb-3 px-1 border-b-2 flex items-center gap-2 transition-colors cursor-pointer ${
             activeTab === 'profile'
               ? 'border-emerald-600 text-emerald-600 font-semibold'
               : 'border-transparent text-gray-500 hover:text-gray-900'
@@ -119,8 +219,8 @@ export function AccountPage() {
         </button>
         <button
           type="button"
-          onClick={() => setActiveTab('security')}
-          className={`pb-3 px-1 border-b-2 flex items-center gap-2 transition-colors ${
+          onClick={() => handleTabChange('security')}
+          className={`pb-3 px-1 border-b-2 flex items-center gap-2 transition-colors cursor-pointer ${
             activeTab === 'security'
               ? 'border-emerald-600 text-emerald-600 font-semibold'
               : 'border-transparent text-gray-500 hover:text-gray-900'
@@ -128,12 +228,17 @@ export function AccountPage() {
         >
           <Shield className="w-4 h-4" /> Security & Passwords
         </button>
-        <Link
-          to="/account/orders"
-          className="pb-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-900 flex items-center gap-2 transition-colors"
+        <button
+          type="button"
+          onClick={() => handleTabChange('orders')}
+          className={`pb-3 px-1 border-b-2 flex items-center gap-2 transition-colors cursor-pointer ml-auto sm:ml-0 ${
+            activeTab === 'orders'
+              ? 'border-emerald-600 text-emerald-600 font-semibold'
+              : 'border-transparent text-gray-500 hover:text-gray-900'
+          }`}
         >
           <ShoppingBag className="w-4 h-4 text-emerald-600" /> My Orders & Purchases
-        </Link>
+        </button>
       </div>
 
       {/* Tab 1: Profile Information */}
@@ -246,9 +351,137 @@ export function AccountPage() {
           </div>
         </div>
       )}
+
+      {/* Tab 3: My Orders & Purchases (Embedded directly without changing screen) */}
+      {activeTab === 'orders' && (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-bold text-gray-900">Order History & Deliveries</h3>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Track, return, or review your purchases.
+              </p>
+            </div>
+            <Link to="/track-order">
+              <Button variant="secondary" size="sm" className="flex items-center gap-1.5">
+                <Truck className="w-4 h-4 text-emerald-600" />
+                <span>Track Any Order</span>
+              </Button>
+            </Link>
+          </div>
+
+          {/* Filter Status Tabs */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-gray-100">
+            {STATUS_TABS.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => {
+                  setSelectedStatus(tab.id);
+                  setCurrentPage(1);
+                }}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                  selectedStatus === tab.id
+                    ? 'bg-emerald-600 text-white shadow-2xs'
+                    : 'text-gray-600 hover:bg-gray-100 bg-white border border-gray-200/70'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Orders List Content */}
+          {ordersLoading ? (
+            <div className="py-16 flex justify-center bg-white rounded-2xl border border-gray-200">
+              <LoadingSpinner size="lg" />
+            </div>
+          ) : ordersError ? (
+            <div className="p-6 text-center bg-rose-50 rounded-2xl border border-rose-200 text-rose-700 text-xs">
+              {ordersError}
+            </div>
+          ) : orders && orders.length > 0 ? (
+            <div className="space-y-4">
+              {orders.map((order) => (
+                <div
+                  key={order._id}
+                  className="bg-white rounded-2xl border border-gray-200 p-5 shadow-2xs hover:shadow-xs transition-shadow space-y-4"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-gray-100">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-400">Order:</span>
+                        <span className="text-xs font-extrabold text-gray-900 font-mono">
+                          {order.orderNumber}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-gray-400">
+                        Placed on {formatDate(order.createdAt)}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {getStatusBadge(order.orderStatus)}
+                      <Link to={`/account/orders/${order.orderNumber}`}>
+                        <Button variant="outline" size="sm" className="text-xs py-1 px-2.5">
+                          <span>Details</span>
+                          <ChevronRight className="w-3.5 h-3.5 ml-1" />
+                        </Button>
+                      </Link>
+                    </div>
+                  </div>
+
+                  {/* Order Items Snippet */}
+                  <div className="space-y-2">
+                    {order.items?.map((item, idx) => (
+                      <div key={idx} className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-9 h-9 rounded-lg bg-gray-100 border border-gray-200/60 overflow-hidden shrink-0 flex items-center justify-center">
+                            {item.imageUrl ? (
+                              <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover" />
+                            ) : (
+                              <Package className="w-4 h-4 text-gray-400" />
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-semibold text-gray-900 truncate max-w-xs">{item.title}</p>
+                            <p className="text-[11px] text-gray-400">Qty: {item.quantity} • SKU: {item.sku}</p>
+                          </div>
+                        </div>
+                        <span className="font-bold text-gray-900 shrink-0">
+                          {formatCurrency(item.unitPrice * item.quantity)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="pt-3 border-t border-gray-100 flex items-center justify-between text-xs">
+                    <span className="text-gray-500">Total Paid</span>
+                    <span className="text-sm font-extrabold text-gray-900">
+                      {formatCurrency(order.pricing?.total || 0)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="bg-white rounded-2xl border border-gray-200 p-10 text-center space-y-3">
+              <Package className="w-10 h-10 text-gray-300 mx-auto" />
+              <h4 className="text-sm font-bold text-gray-900">No orders found</h4>
+              <p className="text-xs text-gray-500">
+                {selectedStatus ? `You have no ${selectedStatus} orders.` : "You haven't placed any orders yet."}
+              </p>
+              <Link to="/products">
+                <Button size="sm" className="mt-2">
+                  Start Shopping
+                </Button>
+              </Link>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
 export default AccountPage;
-

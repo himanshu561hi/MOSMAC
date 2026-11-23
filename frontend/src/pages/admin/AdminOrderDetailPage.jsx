@@ -30,12 +30,15 @@ import {
 
 // Strict State Transition Map matching backend orderService.js
 const ALLOWED_TRANSITIONS = {
+  placed: ['confirmed', 'cancelled'],
   pending: ['confirmed', 'cancelled'],
   confirmed: ['processing', 'cancelled'],
   processing: ['shipped', 'cancelled'],
-  shipped: ['delivered', 'cancelled'],
-  delivered: [],
-  cancelled: []
+  shipped: ['out_for_delivery', 'delivered', 'cancelled'],
+  out_for_delivery: ['delivered', 'cancelled'],
+  delivered: ['returned'],
+  cancelled: [],
+  returned: []
 };
 
 export function AdminOrderDetailPage() {

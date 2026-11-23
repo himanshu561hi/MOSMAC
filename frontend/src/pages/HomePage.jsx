@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowRight,
@@ -9,50 +9,72 @@ import {
   Sparkles,
   Layers,
   Star,
+  ChevronLeft,
   ChevronRight,
   TrendingUp,
   Package
 } from 'lucide-react';
 import { storefrontService } from '@/services/storefrontService';
 import { cmsService } from '@/services/cmsService';
+import { homepageSectionService } from '@/services/homepageSectionService';
 import ProductCard from '@/components/product/ProductCard';
 import Button from '@/components/common/Button';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
+import HeroAccordionGallery from '@/components/home/HeroAccordionGallery';
+import HeroCarousel from '@/components/home/HeroCarousel';
+import OffersRibbonBanner from '@/components/home/OffersRibbonBanner';
+import { BrandStylizedLogo } from '@/components/layout/BrandsMegaMenu';
 import { SeoHead, buildOrganizationSchema, buildWebSiteSchema } from '@/components/common/SeoHead';
 
 const RECENTLY_VIEWED_KEY = 'aurora_recently_viewed';
 
 export function HomePage() {
   const [data, setData] = useState(null);
+  const [dynamicSections, setDynamicSections] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [recentlyViewed, setRecentlyViewed] = useState([]);
-  const [activeTab, setActiveTab] = useState('featured'); // 'featured' | 'newArrivals' | 'bestSellers'
+  const featuredCarouselRef = useRef(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
 
   useEffect(() => {
     async function loadHome() {
       setIsLoading(true);
       setError('');
       try {
-        const [homeData, cmsLayout, cmsBanners] = await Promise.all([
+        const [homeData, cmsLayout, cmsBanners, storefrontSections] = await Promise.all([
           storefrontService.getHomepageData().catch(() => null),
           cmsService.getHomepageLayout().catch(() => []),
-          cmsService.getPublicBanners('hero').catch(() => [])
+          cmsService.getPublicBanners('hero').catch(() => []),
+          homepageSectionService.getStorefrontSections().catch(() => [])
         ]);
 
         const mergedData = { ...(homeData || {}) };
         if (cmsBanners && cmsBanners.length > 0) {
           mergedData.heroBanners = cmsBanners.map((b) => ({
+            id: b._id,
             title: b.title,
             subtitle: b.subtitle,
             ctaText: b.ctaLabel || 'Shop Now',
             ctaLink: b.ctaDestination || '/products',
             imageUrl: b.desktopImageUrl,
+            desktopImageUrl: b.desktopImageUrl,
+            mobileImageUrl: b.mobileImageUrl,
             badge: 'FEATURED CAMPAIGN'
           }));
+        } else {
+          mergedData.heroBanners = [];
         }
         mergedData.cmsSections = cmsLayout || [];
         setData(mergedData);
+        const resolvedSections =
+          Array.isArray(storefrontSections) && storefrontSections.length > 0
+            ? storefrontSections
+            : Array.isArray(homeData?.dynamicSections) && homeData.dynamicSections.length > 0
+            ? homeData.dynamicSections
+            : [];
+        setDynamicSections(resolvedSections);
       } catch (err) {
         console.error('Failed to load homepage:', err);
         setError(err.message || 'Failed to load catalogue');
@@ -73,268 +95,298 @@ export function HomePage() {
     }
   }, []);
 
-  const heroBanner = data?.heroBanners?.[0] || {
-    title: 'Curated Quality Products for Modern Living',
-    subtitle: 'Discover handpicked products across categories with pan-India delivery, cash on delivery, and 7-day returns.',
-    ctaText: 'Explore Collection',
-    ctaLink: '/products',
-    badge: 'NEW SEASON ESSENTIALS',
-    imageUrl: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1600&q=80'
+  const categoriesToDisplay =
+    data?.featuredCategories && data.featuredCategories.length > 0
+      ? data.featuredCategories
+      : data?.categories || [];
+
+  const featuredSection = dynamicSections.find((s) => s.slug === 'featured');
+  // Only active if the section exists in dynamicSections (which filters isActive: true) and has products
+  const isFeaturedActive = Boolean(
+    featuredSection &&
+    featuredSection.isActive !== false &&
+    Array.isArray(featuredSection.products) &&
+    featuredSection.products.length > 0
+  );
+  const featuredProductsList = isFeaturedActive ? featuredSection.products : [];
+
+  const featuredHeading = featuredSection?.heading || featuredSection?.name || 'Featured Collection';
+  const featuredSubtitle = featuredSection?.subtitle || 'Handcrafted formulas, dermatologically tested and certified genuine';
+  const featuredViewAllLink = featuredSection?.viewAllLink || '/products?section=featured';
+  const featuredMaxProducts = featuredSection?.maxProducts || 12;
+  const displayedFeaturedProducts = featuredProductsList.slice(0, featuredMaxProducts);
+  const isCarousel = displayedFeaturedProducts.length > 4;
+
+  const checkCarouselScroll = () => {
+    if (featuredCarouselRef.current) {
+      const { scrollLeft, scrollWidth, clientWidth } = featuredCarouselRef.current;
+      setCanScrollLeft(scrollLeft > 8);
+      setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 8);
+    }
   };
 
-  const currentProductList =
-    activeTab === 'featured'
-      ? data?.featuredProducts || []
-      : activeTab === 'newArrivals'
-      ? data?.newArrivals || []
-      : data?.bestSellers || [];
+  useEffect(() => {
+    checkCarouselScroll();
+    const handleResize = () => checkCarouselScroll();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [displayedFeaturedProducts]);
+
+  const scrollCarousel = (direction) => {
+    if (featuredCarouselRef.current) {
+      const { clientWidth } = featuredCarouselRef.current;
+      const scrollAmount = direction === 'left' ? -clientWidth * 0.75 : clientWidth * 0.75;
+      featuredCarouselRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+      setTimeout(checkCarouselScroll, 350);
+    }
+  };
 
   return (
-    <div className="space-y-12 sm:space-y-16 pb-16">
+    <div className="space-y-10 sm:space-y-12 pb-16">
       <SeoHead
-        title="Aura | Curated Quality Products for Modern Living"
-        description="Discover handpicked lifestyle and electronics products with pan-India delivery, cash on delivery, and 7-day returns."
+        title="Mosmac | Modern Luxury Cosmetics & Beauty Platform"
+        description="Discover handpicked luxury cosmetics, makeup, skincare, and everyday beauty essentials on Mosmac with pan-India delivery, Cash on Delivery, and genuine quality guarantee."
         canonicalUrl="/"
         jsonLd={[buildWebSiteSchema(), buildOrganizationSchema()]}
       />
 
-      {/* 1. Dynamic Hero Banner Section */}
-      <section className="relative bg-slate-950 text-white overflow-hidden rounded-b-3xl">
-        <div className="absolute inset-0 z-0 opacity-40">
-          <img
-            src={heroBanner.imageUrl}
-            alt={heroBanner.title}
-            className="w-full h-full object-cover"
-          />
-          <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/80 to-transparent" />
-        </div>
+      {/* 1. Flagship Hero Accordion Gallery (React Bits) */}
+      <HeroAccordionGallery cmsBanners={data?.heroBanners || []} />
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-28 relative z-10">
-          <div className="max-w-2xl space-y-6">
-            {heroBanner.badge && (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-xs font-bold uppercase tracking-wider">
-                <Sparkles className="w-3.5 h-3.5" />
-                {heroBanner.badge}
-              </span>
-            )}
-
-            <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.15]">
-              {heroBanner.title}
-            </h1>
-
-            <p className="text-sm sm:text-base text-gray-300 leading-relaxed max-w-xl">
-              {heroBanner.subtitle}
-            </p>
-
-            <div className="flex flex-wrap items-center gap-4 pt-2">
-              <Link to={heroBanner.ctaLink || '/products'}>
-                <Button size="lg" className="shadow-lg shadow-emerald-900/40">
-                  {heroBanner.ctaText || 'Shop Now'} <ArrowRight className="w-4 h-4 ml-1.5" />
-                </Button>
-              </Link>
-              <Link to="/products?inStock=true">
-                <Button
-                  variant="outline"
-                  size="lg"
-                  className="bg-white/10 text-white hover:bg-white hover:text-gray-900 border-white/20 backdrop-blur-xs"
-                >
-                  View In-Stock Items
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 2. Promotional Value Propositions */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-              <Truck className="w-6 h-6" />
-            </div>
-            <div>
-              <h4 className="text-sm font-bold text-gray-900">Pan-India Delivery</h4>
-              <p className="text-xs text-gray-500 mt-0.5">Free delivery on orders over ₹999</p>
-            </div>
-          </div>
-
-          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-              <ShieldCheck className="w-6 h-6" />
-            </div>
-            <div>
-              <h4 className="text-sm font-bold text-gray-900">100% Genuine Products</h4>
-              <p className="text-xs text-gray-500 mt-0.5">Direct sourcing & verified warranty</p>
-            </div>
-          </div>
-
-          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-              <RotateCcw className="w-6 h-6" />
-            </div>
-            <div>
-              <h4 className="text-sm font-bold text-gray-900">7-Day Easy Returns</h4>
-              <p className="text-xs text-gray-500 mt-0.5">Hassle-free doorstep collection</p>
-            </div>
-          </div>
-
-          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
-              <Headphones className="w-6 h-6" />
-            </div>
-            <div>
-              <h4 className="text-sm font-bold text-gray-900">Dedicated Support</h4>
-              <p className="text-xs text-gray-500 mt-0.5">Quick resolutions on WhatsApp & email</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 3. Category Discovery Grid */}
-      {data?.featuredCategories && data.featuredCategories.length > 0 && (
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
-          <div className="flex items-end justify-between">
-            <div>
-              <h2 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight flex items-center gap-2">
-                <Layers className="w-5 h-5 text-emerald-600" />
-                Featured Categories
-              </h2>
-              <p className="text-xs sm:text-sm text-gray-500 mt-1">
-                Explore handpicked departments and curated product collections.
-              </p>
-            </div>
+      {/* 2. Top Categories Showcase (Matching Reference Screenshot) */}
+      {categoriesToDisplay.length > 0 && (
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">
+              Top Categories
+            </h2>
             <Link
               to="/products"
-              className="text-xs sm:text-sm font-semibold text-emerald-600 hover:text-emerald-700 flex items-center gap-1 group"
+              className="text-xs sm:text-sm font-semibold text-gray-700 hover:text-black flex items-center gap-1 group"
             >
-              Browse All <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+              View All <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
             </Link>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
-            {data.featuredCategories.map((cat) => (
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4 pt-1">
+            {categoriesToDisplay.slice(0, 8).map((cat) => (
               <Link
                 key={cat._id}
-                to={`/products?category=${cat.slug}`}
-                className="group bg-white rounded-2xl border border-gray-100 p-4 shadow-2xs hover:shadow-md transition-all text-center flex flex-col items-center justify-center gap-3"
+                to={`/category/${cat.slug}`}
+                className="group flex flex-col items-center text-center gap-2"
               >
-                <div className="w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center overflow-hidden border border-emerald-100 group-hover:scale-105 transition-transform">
+                <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gray-50 border border-gray-200 p-1 overflow-hidden group-hover:border-gray-900 group-hover:shadow-md transition-all flex items-center justify-center">
                   {cat.imageUrl ? (
-                    <img src={cat.imageUrl} alt={cat.name} className="w-full h-full object-cover" />
+                    <img
+                      src={cat.imageUrl}
+                      alt={cat.name}
+                      className="w-full h-full object-cover rounded-full group-hover:scale-105 transition-transform"
+                    />
                   ) : (
-                    <Layers className="w-7 h-7" />
+                    <div className="w-full h-full rounded-full bg-gradient-to-tr from-rose-50 via-orange-50 to-amber-50 flex items-center justify-center text-gray-700 font-bold text-sm sm:text-base">
+                      {cat.name.slice(0, 2).toUpperCase()}
+                    </div>
                   )}
                 </div>
-                <div>
-                  <h3 className="font-semibold text-xs sm:text-sm text-gray-900 group-hover:text-emerald-600 transition-colors">
-                    {cat.name}
-                  </h3>
-                </div>
+                <span className="text-xs font-medium text-gray-800 group-hover:text-black transition-colors line-clamp-1 max-w-[90px]">
+                  {cat.name}
+                </span>
               </Link>
             ))}
           </div>
         </section>
       )}
 
-      {/* 4. Products Showcase with Interactive Tabs */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-gray-100 pb-4">
-          <div>
-            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-emerald-600" />
-              Popular Products
-            </h2>
-            <p className="text-xs sm:text-sm text-gray-500 mt-1">
-              Top-rated and trending items ready for immediate dispatch.
-            </p>
+      {/* 4. Editorial "Get The Look" & Featured Products Section */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className={`bg-[#f2ded7] rounded-3xl p-6 sm:p-8 md:p-10 shadow-xs ${isFeaturedActive ? 'space-y-8' : ''}`}>
+          {/* Top Editorial Banner */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+            <div className="md:col-span-6 lg:col-span-5 space-y-3.5 sm:space-y-4">
+              <h2 className="font-serif text-3xl sm:text-4xl lg:text-5xl text-gray-900 tracking-tight leading-tight">
+                Signature Glam
+              </h2>
+              <p className="text-sm sm:text-base text-gray-700 max-w-md leading-relaxed font-normal">
+                Professional touch, seamless blending, and radiant finish for every occasion
+              </p>
+              <div>
+                <Link
+                  to="/products?category=face-makeup"
+                  className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-bold text-gray-950 hover:text-rose-700 group transition-colors"
+                >
+                  <span className="border-b border-gray-950 group-hover:border-rose-700 pb-0.5">Explore Collection</span>
+                  <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </Link>
+              </div>
+            </div>
+
+            <div className="md:col-span-6 lg:col-span-7 flex justify-end">
+              <div className="w-full max-w-lg overflow-hidden rounded-2xl shadow-sm border border-white/40">
+                <img
+                  src="/images/editorial/get-the-look-model.jpg"
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = 'https://static.vecteezy.com/system/resources/thumbnails/024/101/572/small/applying-tone-to-skin-beautiful-woman-face-hand-of-visagiste-painting-cosmetics-beauty-model-girl-make-up-ai-generated-photo.jpg';
+                  }}
+                  alt="Get The Look - Soft washes of pink and luminous skin"
+                  className="w-full h-56 sm:h-64 md:h-72 object-cover object-center hover:scale-105 transition-transform duration-500"
+                />
+              </div>
+            </div>
           </div>
 
-          <div className="flex items-center gap-1.5 bg-gray-100 p-1 rounded-xl self-start sm:self-auto text-xs font-semibold">
-            <button
-              type="button"
-              onClick={() => setActiveTab('featured')}
-              className={`px-3.5 py-1.5 rounded-lg transition-all ${
-                activeTab === 'featured'
-                  ? 'bg-white text-gray-900 shadow-xs'
-                  : 'text-gray-500 hover:text-gray-900'
-              }`}
-            >
-              Featured
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('newArrivals')}
-              className={`px-3.5 py-1.5 rounded-lg transition-all ${
-                activeTab === 'newArrivals'
-                  ? 'bg-white text-gray-900 shadow-xs'
-                  : 'text-gray-500 hover:text-gray-900'
-              }`}
-            >
-              New Arrivals
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('bestSellers')}
-              className={`px-3.5 py-1.5 rounded-lg transition-all ${
-                activeTab === 'bestSellers'
-                  ? 'bg-white text-gray-900 shadow-xs'
-                  : 'text-gray-500 hover:text-gray-900'
-              }`}
-            >
-              Best Sellers
-            </button>
-          </div>
-        </div>
+          {/* Featured Products Showcase (Controlled by Admin Panel Homepage Sections) */}
+          {isFeaturedActive && (
+            <div className="space-y-4 pt-4 border-t border-black/5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight">
+                    {featuredHeading}
+                  </h3>
+                  {featuredSubtitle && (
+                    <p className="text-xs text-gray-600 mt-0.5">{featuredSubtitle}</p>
+                  )}
+                </div>
 
-        {isLoading ? (
-          <div className="py-20 flex flex-col items-center justify-center gap-3">
-            <LoadingSpinner size="lg" />
-            <p className="text-xs text-gray-400">Loading products...</p>
-          </div>
-        ) : currentProductList.length === 0 ? (
-          <div className="py-16 text-center bg-white rounded-2xl border border-gray-100 p-8">
-            <Package className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <h3 className="text-sm font-semibold text-gray-900">No products available</h3>
-            <p className="text-xs text-gray-500 mt-1">Check back soon as new inventory is published.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
-            {currentProductList.map((product) => (
-              <ProductCard key={product._id} product={product} />
-            ))}
-          </div>
-        )}
+                <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+                  {isCarousel && (
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => scrollCarousel('left')}
+                        disabled={!canScrollLeft}
+                        className="w-8 h-8 rounded-full bg-white/90 hover:bg-white text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center shadow-xs transition-all border border-black/5 hover:scale-105 active:scale-95"
+                        aria-label="Previous products"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => scrollCarousel('right')}
+                        disabled={!canScrollRight}
+                        className="w-8 h-8 rounded-full bg-white/90 hover:bg-white text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center shadow-xs transition-all border border-black/5 hover:scale-105 active:scale-95"
+                        aria-label="Next products"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
 
-        <div className="text-center pt-4">
-          <Link to="/products">
-            <Button variant="secondary" size="md">
-              View All Products in Catalogue &rarr;
-            </Button>
-          </Link>
+                  <Link
+                    to={featuredViewAllLink}
+                    className="text-xs sm:text-sm font-semibold text-gray-800 hover:text-gray-950 flex items-center gap-1 group shrink-0"
+                  >
+                    <span>View All</span>
+                    <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                  </Link>
+                </div>
+              </div>
+
+              {isLoading ? (
+                <div className="py-16 flex flex-col items-center justify-center gap-2">
+                  <LoadingSpinner size="md" />
+                  <p className="text-xs text-gray-600">Loading products...</p>
+                </div>
+              ) : displayedFeaturedProducts.length === 0 ? (
+                <div className="py-12 text-center bg-white/80 rounded-2xl border border-white/60 p-6">
+                  <Package className="w-10 h-10 text-gray-400 mx-auto mb-2" />
+                  <h4 className="text-sm font-semibold text-gray-900">No products available</h4>
+                  <p className="text-xs text-gray-500 mt-0.5">Check back soon for new arrivals.</p>
+                </div>
+              ) : isCarousel ? (
+                <div
+                  ref={featuredCarouselRef}
+                  onScroll={checkCarouselScroll}
+                  className="flex gap-4 sm:gap-5 overflow-x-auto scrollbar-none scroll-smooth snap-x snap-mandatory pb-3 pt-1"
+                  style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                >
+                  {displayedFeaturedProducts.map((product) => (
+                    <div
+                      key={product._id}
+                      className="shrink-0 snap-start w-[calc(50%-8px)] sm:w-[calc(33.333%-11px)] lg:w-[calc(25%-15px)]"
+                    >
+                      <ProductCard product={product} />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
+                  {displayedFeaturedProducts.map((product) => (
+                    <ProductCard key={product._id} product={product} />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </section>
+
+      {/* Offers Ribbon Marquee Banner (Directly Below Featured Section) */}
+      <OffersRibbonBanner offers={data?.promotionalOffers || []} />
+
+      {/* Dynamic Admin-Managed Homepage Sections */}
+      {dynamicSections && dynamicSections.length > 0 && (
+        <div className="space-y-12">
+          {dynamicSections
+            .filter((sec) => sec.slug !== 'featured' && sec.isActive !== false && Array.isArray(sec.products) && sec.products.length > 0)
+            .sort((a, b) => (a.displayPosition || 0) - (b.displayPosition || 0))
+            .map((section) => (
+              <section key={section._id || section.slug} className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-5">
+                <div className="flex items-end justify-between border-b border-gray-100 pb-3">
+                  <div>
+                    <h2 className="text-xl sm:text-2xl font-extrabold text-gray-900 tracking-tight">
+                      {section.heading || section.name}
+                    </h2>
+                    {section.subtitle && (
+                      <p className="text-xs sm:text-sm text-gray-500 mt-1">
+                        {section.subtitle}
+                      </p>
+                    )}
+                  </div>
+
+                  {section.showViewAll && (
+                    <Link
+                      to={section.viewAllLink || `/products?section=${section.slug}`}
+                      className="text-xs sm:text-sm font-bold text-gray-800 hover:text-[#E03A30] flex items-center gap-1 group transition-colors"
+                    >
+                      <span>View All</span>
+                      <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                    </Link>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
+                  {section.products.slice(0, section.maxProducts || 8).map((product) => (
+                    <ProductCard key={product._id} product={product} />
+                  ))}
+                </div>
+              </section>
+            ))}
+        </div>
+      )}
 
       {/* 5. Brand Showcase */}
       {data?.brands && data.brands.length > 0 && (
         <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4">
           <div className="text-center space-y-1">
-            <h2 className="text-lg font-bold text-gray-900">Featured Brands</h2>
-            <p className="text-xs text-gray-500">Official brand partners verified for authenticity</p>
+            <h2 className="text-xl font-black text-gray-950 uppercase tracking-tight">Featured Brands</h2>
+            <p className="text-xs text-gray-500 font-medium">Official verified brand partners & authorized flagships</p>
           </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-8 pt-2">
+          <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 pt-2">
             {data.brands.map((brand) => (
               <Link
                 key={brand._id}
                 to={`/products?brand=${brand.slug}`}
-                className="px-4 py-3 bg-white rounded-xl border border-gray-100 shadow-2xs hover:border-emerald-500 transition-colors flex items-center justify-center min-w-[120px] text-xs font-bold text-gray-700 hover:text-emerald-700"
+                className="group relative flex flex-col items-center justify-center h-20 sm:h-24 w-44 sm:w-52 p-3 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:border-[#E03A30] hover:shadow-md transition-all duration-200 transform hover:-translate-y-0.5"
+                title={`Shop ${brand.name}`}
               >
-                {brand.logoUrl ? (
-                  <img src={brand.logoUrl} alt={brand.name} className="h-6 object-contain" />
-                ) : (
-                  <span>{brand.name}</span>
-                )}
+                <div className="h-10 w-full flex items-center justify-center">
+                  <BrandStylizedLogo name={brand.name} logoUrl={brand.logoUrl} />
+                </div>
+                <span className="text-[11px] font-semibold text-slate-500 group-hover:text-slate-900 mt-1 truncate max-w-[90%] transition-colors">
+                  {brand.name}
+                </span>
               </Link>
             ))}
           </div>

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   getCategories,
   getCategoryBySlug,
+  getCategoryDeletePreview,
   createCategory,
   updateCategory,
   deleteCategory
@@ -16,6 +17,14 @@ export const categoryRoutes = Router();
 // Public routes
 categoryRoutes.get('/', optionalAuthenticate, getCategories);
 categoryRoutes.get('/:slug', getCategoryBySlug);
+
+// Admin preview route
+categoryRoutes.get(
+  '/:id/delete-preview',
+  authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.STORE_MANAGER),
+  getCategoryDeletePreview
+);
 
 // Admin-protected mutation routes
 categoryRoutes.post(

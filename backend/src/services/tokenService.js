@@ -70,11 +70,12 @@ export function verifyAccessToken(token) {
  */
 export function setRefreshCookie(res, refreshToken) {
   const isProd = env.NODE_ENV === 'production';
+  const sameSite = isProd ? (env.COOKIE_SAME_SITE || 'none') : 'lax';
 
   res.cookie(REFRESH_COOKIE_NAME, refreshToken, {
     httpOnly: true,
     secure: isProd,
-    sameSite: isProd ? 'strict' : 'lax',
+    sameSite,
     path: '/',
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
     ...(env.COOKIE_DOMAIN ? { domain: env.COOKIE_DOMAIN } : {})
@@ -87,11 +88,12 @@ export function setRefreshCookie(res, refreshToken) {
  */
 export function clearRefreshCookie(res) {
   const isProd = env.NODE_ENV === 'production';
+  const sameSite = isProd ? (env.COOKIE_SAME_SITE || 'none') : 'lax';
 
   res.clearCookie(REFRESH_COOKIE_NAME, {
     httpOnly: true,
     secure: isProd,
-    sameSite: isProd ? 'strict' : 'lax',
+    sameSite,
     path: '/',
     ...(env.COOKIE_DOMAIN ? { domain: env.COOKIE_DOMAIN } : {})
   });

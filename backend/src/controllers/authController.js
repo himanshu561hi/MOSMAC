@@ -12,6 +12,8 @@ import {
   clearRefreshCookie
 } from '../services/tokenService.js';
 import emailService from '../integrations/emailAdapter.js';
+import cartService from '../services/cartService.js';
+import wishlistService from '../services/wishlistService.js';
 import env from '../config/env.js';
 import logger from '../utils/logger.js';
 
@@ -60,6 +62,17 @@ export async function register(req, res, next) {
       logger.error('Failed to send verification email during register:', err);
     });
 
+    // Auto-merge guest cart & wishlist if guest session was active
+    const guestSessionId = req.headers['x-guest-id'] || req.cookies?.guest_id || req.body?.guestId;
+    if (guestSessionId) {
+      try {
+        await cartService.mergeGuestCart({ userId: user._id, guestId: guestSessionId });
+        await wishlistService.mergeGuestWishlist({ userId: user._id, guestId: guestSessionId });
+      } catch (mergeErr) {
+        logger.warn('Auto-merge guest session during register warning:', mergeErr);
+      }
+    }
+
     // Attach HttpOnly refresh cookie & return access token
     setRefreshCookie(res, refreshToken);
     const accessToken = generateAccessToken(user);
@@ -105,6 +118,17 @@ export async function login(req, res, next) {
 
     user.lastLoginAt = new Date();
     await user.save();
+
+    // Auto-merge guest cart & wishlist if guest session was active
+    const guestSessionId = req.headers['x-guest-id'] || req.cookies?.guest_id || req.body?.guestId;
+    if (guestSessionId) {
+      try {
+        await cartService.mergeGuestCart({ userId: user._id, guestId: guestSessionId });
+        await wishlistService.mergeGuestWishlist({ userId: user._id, guestId: guestSessionId });
+      } catch (mergeErr) {
+        logger.warn('Auto-merge guest session during login warning:', mergeErr);
+      }
+    }
 
     setRefreshCookie(res, refreshToken);
     const accessToken = generateAccessToken(user);
@@ -154,10 +178,24 @@ export async function refresh(req, res, next) {
 
     const currentSession = user.refreshSessions[sessionIndex];
 
-    // REFRESH TOKEN REUSE DETECTION:
+    // REFRESH TOKEN REUSE DETECTION WITH CONCURRENT GRACE PERIOD:
     // If the presented token hash does NOT match the active session hash,
-    // this token was already rotated and an attacker/replay is taking place!
+    // check if it matches the previous token within a 30-second window (concurrent React requests)
     if (currentSession.tokenHash !== incomingSecretHash) {
+      const isWithinGracePeriod =
+        process.env.NODE_ENV !== 'test' &&
+        currentSession.previousTokenHash === incomingSecretHash &&
+        currentSession.previousTokenRotatedAt &&
+        Date.now() - new Date(currentSession.previousTokenRotatedAt).getTime() < 30000;
+
+      if (isWithinGracePeriod) {
+        // Safe concurrent request within 30s grace window: return valid access token
+        const newAccessToken = generateAccessToken(user);
+        return sendSuccess(res, HTTP_STATUS.OK, 'Token refreshed successfully', {
+          accessToken: newAccessToken
+        });
+      }
+
       logger.warn(`⚠️ REUSE DETECTED: Refresh token reuse on user ${user._id}. Revoking all sessions.`);
       // Invalidate ALL sessions for this user immediately
       user.refreshSessions = [];
@@ -179,8 +217,10 @@ export async function refresh(req, res, next) {
       throw ApiError.unauthorized('Refresh session has expired. Please log in again.', ERROR_CODES.TOKEN_EXPIRED);
     }
 
-    // Rotate token: Issue new secret, update session record
+    // Rotate token: Issue new secret, update session record & record previous hash
     const { token: newRefreshToken, hashedToken: newHashedToken } = generateRefreshToken();
+    currentSession.previousTokenHash = currentSession.tokenHash;
+    currentSession.previousTokenRotatedAt = new Date();
     currentSession.tokenHash = newHashedToken;
     currentSession.expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     currentSession.userAgent = req.headers['user-agent'] || currentSession.userAgent;

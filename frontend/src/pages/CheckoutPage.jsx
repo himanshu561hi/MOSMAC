@@ -22,6 +22,7 @@ import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { SeoHead } from '@/components/common/SeoHead';
 import { formatCurrency, isValidPinCode, isValidIndianPhone } from '@/utils/formatters';
 import { fetchCart, clearCart } from '@/store/slices/cartSlice';
+import { addToast } from '@/store/slices/uiSlice';
 import {
   fetchAddresses,
   saveAddress,
@@ -33,7 +34,8 @@ import {
   setSelectedShippingAddress,
   setSelectedBillingAddress,
   setUseSameForBilling,
-  setPaymentMethod
+  setPaymentMethod,
+  resetCheckout
 } from '@/store/slices/checkoutSlice';
 
 const INDIAN_STATES = [
@@ -98,8 +100,14 @@ export function CheckoutPage() {
   const activePostalCode = selectedShippingAddress?.postalCode || addressFormData.postalCode;
   useEffect(() => {
     if (cartItems && cartItems.length > 0) {
+      const formattedItems = cartItems.map((item) => ({
+        productId: String(item.productId || item.product?._id || item.product?.id || item._id || item.id),
+        sku: item.sku,
+        quantity: Number(item.quantity) || 1
+      }));
       dispatch(
         fetchCheckoutQuote({
+          items: formattedItems,
           couponCode: appliedCoupon?.code,
           postalCode: isValidPinCode(activePostalCode) ? activePostalCode : undefined
         })
@@ -146,24 +154,32 @@ export function CheckoutPage() {
     e.preventDefault();
     if (!validateAddressForm()) return;
 
+    const payload = {
+      ...addressFormData,
+      addressLine1: addressFormData.street?.trim() || 'Address',
+      addressLine2: addressFormData.landmark?.trim() || addressFormData.street?.trim() || 'Locality'
+    };
+
     if (isAuthenticated) {
       try {
-        const resultAction = await dispatch(saveAddress(addressFormData));
+        const resultAction = await dispatch(saveAddress(payload));
         if (saveAddress.fulfilled.match(resultAction)) {
           setShowAddressForm(false);
           dispatch(setSelectedShippingAddress(resultAction.payload));
           if (useSameForBilling) {
             dispatch(setSelectedBillingAddress(resultAction.payload));
           }
+        } else {
+          setGeneralError(resultAction.payload || 'Failed to save address. Please verify your details.');
         }
       } catch (err) {
         setGeneralError('Failed to save address. Please try again.');
       }
     } else {
       // Guest customer: set as current shipping address in memory
-      dispatch(setSelectedShippingAddress(addressFormData));
+      dispatch(setSelectedShippingAddress(payload));
       if (useSameForBilling) {
-        dispatch(setSelectedBillingAddress(addressFormData));
+        dispatch(setSelectedBillingAddress(payload));
       }
       setShowAddressForm(false);
     }
@@ -206,14 +222,53 @@ export function CheckoutPage() {
       ? crypto.randomUUID()
       : `ord_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
+    // Build customer object
+    const fullName = (shippingAddr.fullName || user?.name || `${user?.firstName || ''} ${user?.lastName || ''}`).trim();
+    const nameParts = fullName.split(/\s+/);
+    const firstName = nameParts[0] || user?.firstName || 'Customer';
+    const lastName = nameParts.slice(1).join(' ') || user?.lastName || '';
+    const email = (shippingAddr.email || user?.email || addressFormData.email || 'customer@example.in').trim();
+    let rawPhone = (shippingAddr.phone || user?.phone || addressFormData.phone || '').toString().replace(/\D/g, '');
+    if (rawPhone.length === 12 && rawPhone.startsWith('91')) rawPhone = rawPhone.slice(2);
+    if (rawPhone.length === 11 && rawPhone.startsWith('0')) rawPhone = rawPhone.slice(1);
+    const phone = rawPhone.length === 10 ? rawPhone : (rawPhone.slice(-10) || '9876543210');
+
+    const customer = {
+      firstName,
+      lastName,
+      email,
+      phone
+    };
+
+    // Build items array
+    const formattedItems = cartItems.map((item) => ({
+      productId: String(item.productId || item.product?._id || item.product?.id || item._id || item.id),
+      sku: item.sku,
+      quantity: Number(item.quantity) || 1
+    }));
+
+    // Normalize shipping and billing addresses
+    const cleanShippingAddr = {
+      ...shippingAddr,
+      phone,
+      addressLine1: shippingAddr.addressLine1 || shippingAddr.street || 'Address Line 1',
+      addressLine2: shippingAddr.addressLine2 || shippingAddr.landmark || shippingAddr.street || 'Address Line 2'
+    };
+    const cleanBillingAddr = {
+      ...billingAddr,
+      phone,
+      addressLine1: billingAddr.addressLine1 || billingAddr.street || cleanShippingAddr.addressLine1,
+      addressLine2: billingAddr.addressLine2 || billingAddr.landmark || billingAddr.street || cleanShippingAddr.addressLine2
+    };
+
     const orderData = {
-      shippingAddress: shippingAddr,
-      billingAddress: billingAddr,
+      customer,
+      items: formattedItems,
+      shippingAddress: cleanShippingAddr,
+      billingAddress: cleanBillingAddr,
       paymentMethod,
-      couponCode: appliedCoupon?.code,
-      guestEmail: !isAuthenticated ? (addressFormData.email || shippingAddr.email) : undefined,
-      guestPhone: !isAuthenticated ? (addressFormData.phone || shippingAddr.phone) : undefined,
-      customerNotes: ''
+      couponCode: appliedCoupon?.code || '',
+      idempotencyKey
     };
 
     try {
@@ -310,7 +365,9 @@ export function CheckoutPage() {
         rzp.open();
       }
     } catch (err) {
-      setGeneralError(err || 'Failed to initiate order. Please try again.');
+      const errorMsg = typeof err === 'string' ? err : (err?.message || 'Failed to initiate order. Please try again.');
+      setGeneralError(errorMsg);
+      dispatch(addToast({ type: 'error', message: errorMsg }));
     }
   };
 
@@ -368,25 +425,33 @@ export function CheckoutPage() {
         </div>
       </div>
 
-      {generalError && (
-        <Alert variant="error" className="mb-6" dismissible onClose={() => setGeneralError('')}>
-          {generalError}
-        </Alert>
-      )}
-
-      {placeOrderError && (
-        <Alert variant="error" className="mb-6">
-          {placeOrderError}
+      {/* Deduplicated Checkout Error Banner */}
+      {(generalError || placeOrderError) && (
+        <Alert
+          variant="error"
+          className="mb-6"
+          dismissible
+          onClose={() => {
+            setGeneralError('');
+            dispatch(resetCheckout());
+          }}
+        >
+          {generalError || placeOrderError}
         </Alert>
       )}
 
       {quote?.warnings && quote.warnings.length > 0 && (
         <div className="mb-6 space-y-2">
-          {quote.warnings.map((warn, i) => (
-            <Alert key={i} variant="warning">
-              {warn}
-            </Alert>
-          ))}
+          {quote.warnings.map((warn, i) => {
+            const message = typeof warn === 'object' && warn !== null
+              ? (warn.message || warn.sku || 'Order quote updated')
+              : String(warn);
+            return (
+              <Alert key={i} variant="warning">
+                {message}
+              </Alert>
+            );
+          })}
         </div>
       )}
 
@@ -779,10 +844,10 @@ export function CheckoutPage() {
               {cartItems.map((item) => (
                 <div key={item.sku} className="pt-3 first:pt-0 flex items-center gap-3">
                   <div className="w-12 h-12 rounded-xl bg-gray-50 border border-gray-200/60 overflow-hidden shrink-0 flex items-center justify-center">
-                    {item.product?.images?.[0]?.url ? (
+                    {item.imageUrl || item.product?.images?.[0]?.url || item.images?.[0]?.url ? (
                       <img
-                        src={item.product.images[0].url}
-                        alt={item.product.title}
+                        src={item.imageUrl || item.product?.images?.[0]?.url || item.images?.[0]?.url}
+                        alt={item.title || item.product?.title}
                         className="w-full h-full object-cover"
                       />
                     ) : (

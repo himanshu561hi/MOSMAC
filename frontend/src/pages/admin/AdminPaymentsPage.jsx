@@ -38,19 +38,19 @@ export function AdminPaymentsPage() {
           search: search.trim() || undefined,
           status: statusFilter || undefined
         });
-        setPayments(res.payments || []);
-        setPagination(res.pagination || { page: 1, limit: 20, total: 0, pages: 1 });
+        setPayments(res?.payments || []);
+        setPagination(res?.pagination || { page: 1, limit: 20, total: 0, pages: 1 });
       } else {
         const res = await adminService.getRefunds({
           page,
           limit: 20,
           status: statusFilter || undefined
         });
-        setRefunds(res.refunds || []);
-        setPagination(res.pagination || { page: 1, limit: 20, total: 0, pages: 1 });
+        setRefunds(res?.refunds || []);
+        setPagination(res?.pagination || { page: 1, limit: 20, total: 0, pages: 1 });
       }
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to load financial records');
+      setError(err?.response?.data?.message || err?.message || 'Failed to load financial records');
     } finally {
       setLoading(false);
     }

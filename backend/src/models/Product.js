@@ -57,6 +57,11 @@ const variantSchema = new mongoose.Schema(
       trim: true,
       default: ''
     },
+    weight: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
     isActive: {
       type: Boolean,
       default: true
@@ -180,6 +185,11 @@ const productSchema = new mongoose.Schema(
     attributes: {
       type: [productAttributeSchema],
       default: []
+    },
+    weight: {
+      type: Number,
+      default: 0,
+      min: 0
     },
     basePrice: {
       type: Number,

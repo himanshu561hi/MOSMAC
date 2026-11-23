@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { adminCatalogueService } from '@/features/admin/catalogueService';
+import cmsService from '@/services/cmsService';
 import Button from '@/components/common/Button';
 import Input from '@/components/common/Input';
 import Alert from '@/components/common/Alert';
@@ -16,7 +17,10 @@ import {
   Sparkles,
   Check,
   Star,
-  Info
+  Info,
+  UploadCloud,
+  Loader2,
+  Link2
 } from 'lucide-react';
 
 export function AdminProductFormPage() {
@@ -39,26 +43,34 @@ export function AdminProductFormPage() {
   const [slug, setSlug] = useState('');
   const [autoSlug, setAutoSlug] = useState(!isEditMode);
   const [description, setDescription] = useState('');
+  const [weight, setWeight] = useState(''); // Package weight in grams
   const [categoryId, setCategoryId] = useState('');
+  const [selectedParentId, setSelectedParentId] = useState('');
+  const [selectedSubId, setSelectedSubId] = useState('');
   const [brandId, setBrandId] = useState('');
   const [status, setStatus] = useState('draft');
   const [isFeatured, setIsFeatured] = useState(false);
   const [badges, setBadges] = useState([]);
   const [badgeInput, setBadgeInput] = useState('');
 
-  // Images: [{ url, alt, isPrimary, displayOrder }]
+  // Images: [{ url, alt, isPrimary, displayOrder, publicId }]
   const [images, setImages] = useState([]);
+  const [isUploadingImages, setIsUploadingImages] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const [isDragging, setIsDragging] = useState(false);
+  const [imageUploadMode, setImageUploadMode] = useState('file'); // 'file' or 'url'
   const [newImageUrl, setNewImageUrl] = useState('');
   const [newImageAlt, setNewImageAlt] = useState('');
 
   // Dynamic Category Attributes: [{ code, value, unit }]
   const [productAttributes, setProductAttributes] = useState({});
 
-  // Variants: [{ title, sku, attributes, sellingPriceRupees, mrpRupees, stockQuantity, lowStockThreshold, status }]
+  // Variants: [{ title, sku, weight, attributes, sellingPriceRupees, mrpRupees, stockQuantity, lowStockThreshold, status }]
   const [variants, setVariants] = useState([
     {
       title: 'Standard',
       sku: '',
+      weight: '',
       attributes: {},
       sellingPriceRupees: '',
       mrpRupees: '',
@@ -85,7 +97,11 @@ export function AdminProductFormPage() {
         setBrands(brs);
 
         if (!isEditMode && cats.length > 0) {
-          setCategoryId(cats[0]._id);
+          const rootCats = cats.filter((c) => !c.parentId);
+          const defaultCatId = rootCats[0]?._id || cats[0]._id;
+          setSelectedParentId(defaultCatId);
+          setSelectedSubId('');
+          setCategoryId(defaultCatId);
         }
         if (!isEditMode && brs.length > 0) {
           setBrandId(brs[0]._id);
@@ -128,7 +144,20 @@ export function AdminProductFormPage() {
         setTitle(prod.title || '');
         setSlug(prod.slug || '');
         setDescription(prod.description || '');
-        setCategoryId(prod.categoryId?._id || prod.categoryId || '');
+        setWeight(prod.weight !== undefined && prod.weight !== null ? prod.weight : (prod.variants?.[0]?.weight ?? ''));
+        
+        const rawCatId = prod.categoryId?._id || prod.categoryId || '';
+        setCategoryId(rawCatId);
+
+        // Resolve parent vs subcategory
+        const targetCat = categories.find((c) => c._id === rawCatId);
+        if (targetCat && targetCat.parentId) {
+          setSelectedParentId(targetCat.parentId);
+          setSelectedSubId(targetCat._id);
+        } else {
+          setSelectedParentId(rawCatId);
+          setSelectedSubId('');
+        }
         setBrandId(prod.brandId?._id || prod.brandId || '');
         setStatus(prod.status || 'draft');
         setIsFeatured(Boolean(prod.isFeatured));
@@ -150,6 +179,7 @@ export function AdminProductFormPage() {
             prod.variants.map((v) => ({
               title: v.title || 'Standard',
               sku: v.sku || '',
+              weight: v.weight !== undefined && v.weight !== null ? v.weight : (prod.weight ?? ''),
               attributes: v.attributes instanceof Map ? Object.fromEntries(v.attributes) : (v.attributes || {}),
               sellingPriceRupees: (((v.price !== undefined ? v.price : v.sellingPrice) || 0) / 100).toFixed(2),
               mrpRupees: (((v.mrp !== undefined ? v.mrp : 0)) / 100).toFixed(2),
@@ -180,13 +210,25 @@ export function AdminProductFormPage() {
     const val = e.target.value;
     setTitle(val);
     if (autoSlug) {
-      setSlug(
-        val
-          .toLowerCase()
-          .trim()
-          .replace(/[^a-z0-9]+/g, '-')
-          .replace(/^-+|-+$/g, '')
-      );
+      const generatedSlug = val
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+      setSlug(generatedSlug);
+
+      // Auto-populate default variant SKU if unmodified
+      if (!isEditMode && variants.length === 1) {
+        const cleanSkuBase = generatedSlug.replace(/[^a-z0-9]/gi, '').toUpperCase().slice(0, 10);
+        if (cleanSkuBase) {
+          setVariants((prev) => [
+            {
+              ...prev[0],
+              sku: `${cleanSkuBase}-01`
+            }
+          ]);
+        }
+      }
     }
   };
 
@@ -202,22 +244,110 @@ export function AdminProductFormPage() {
     setBadges(badges.filter((_, i) => i !== idx));
   };
 
-  // Images management
-  const handleAddImage = () => {
+  // Multiple Images management via File Upload / Cloudinary
+  const handleFileUpload = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    setUploadError('');
+    setIsUploadingImages(true);
+
+    try {
+      const uploaded = await cmsService.uploadMediaFiles(files, 'ecommerce/products');
+      if (Array.isArray(uploaded) && uploaded.length > 0) {
+        setImages((prev) => {
+          const hasExistingPrimary = prev.some((img) => img.isPrimary);
+          const newFormatted = uploaded.map((item, idx) => ({
+            url: item.url,
+            publicId: item.publicId || '',
+            alt: item.alt || title || `Product Image ${prev.length + idx + 1}`,
+            isPrimary: !hasExistingPrimary && idx === 0,
+            displayOrder: prev.length + idx
+          }));
+          return [...prev, ...newFormatted];
+        });
+      }
+    } catch (err) {
+      setUploadError(err.message || 'Failed to upload images to Cloudinary');
+    } finally {
+      setIsUploadingImages(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = async (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const files = Array.from(e.dataTransfer.files || []).filter((f) => f.type.startsWith('image/'));
+    if (files.length === 0) return;
+    setUploadError('');
+    setIsUploadingImages(true);
+
+    try {
+      const uploaded = await cmsService.uploadMediaFiles(files, 'ecommerce/products');
+      if (Array.isArray(uploaded) && uploaded.length > 0) {
+        setImages((prev) => {
+          const hasExistingPrimary = prev.some((img) => img.isPrimary);
+          const newFormatted = uploaded.map((item, idx) => ({
+            url: item.url,
+            publicId: item.publicId || '',
+            alt: item.alt || title || `Product Image ${prev.length + idx + 1}`,
+            isPrimary: !hasExistingPrimary && idx === 0,
+            displayOrder: prev.length + idx
+          }));
+          return [...prev, ...newFormatted];
+        });
+      }
+    } catch (err) {
+      setUploadError(err.message || 'Failed to upload images to Cloudinary');
+    } finally {
+      setIsUploadingImages(false);
+    }
+  };
+
+  const handleAddImageFromUrl = (e) => {
+    if (e) e.preventDefault();
     const url = newImageUrl.trim();
     if (!url) return;
-    const isFirst = images.length === 0;
-    setImages([
-      ...images,
-      {
-        url,
-        alt: newImageAlt.trim() || title || 'Product Image',
-        isPrimary: isFirst,
-        displayOrder: images.length
-      }
-    ]);
+    setUploadError('');
+
+    try {
+      new URL(url);
+    } catch {
+      setUploadError('Please enter a valid image URL (e.g. https://images.unsplash.com/...)');
+      return;
+    }
+
+    setImages((prev) => {
+      const hasExistingPrimary = prev.some((img) => img.isPrimary);
+      return [
+        ...prev,
+        {
+          url,
+          publicId: '',
+          alt: newImageAlt.trim() || title || `Product Image ${prev.length + 1}`,
+          isPrimary: !hasExistingPrimary,
+          displayOrder: prev.length
+        }
+      ];
+    });
+
     setNewImageUrl('');
     setNewImageAlt('');
+  };
+
+  const handleUpdateImageAlt = (index, alt) => {
+    setImages((prev) =>
+      prev.map((img, i) => (i === index ? { ...img, alt } : img))
+    );
   };
 
   const handleSetPrimaryImage = (index) => {
@@ -231,7 +361,7 @@ export function AdminProductFormPage() {
 
   const handleRemoveImage = (index) => {
     const updated = images.filter((_, i) => i !== index);
-    if (images[index].isPrimary && updated.length > 0) {
+    if (images[index]?.isPrimary && updated.length > 0) {
       updated[0].isPrimary = true;
     }
     setImages(updated);
@@ -245,6 +375,21 @@ export function AdminProductFormPage() {
     }));
   };
 
+  const rootCategories = categories.filter((c) => !c.parentId);
+  const availableSubcategories = categories.filter((c) => c.parentId === selectedParentId);
+  const selectedParentCategoryObj = categories.find((c) => c._id === selectedParentId);
+
+  const handleParentCategoryChange = (parentId) => {
+    setSelectedParentId(parentId);
+    setSelectedSubId('');
+    setCategoryId(parentId);
+  };
+
+  const handleSubCategoryChange = (subId) => {
+    setSelectedSubId(subId);
+    setCategoryId(subId || selectedParentId);
+  };
+
   // Variant management
   const handleAddVariant = () => {
     const count = variants.length + 1;
@@ -253,6 +398,7 @@ export function AdminProductFormPage() {
       {
         title: `Variant ${count}`,
         sku: `${slug ? slug.toUpperCase().slice(0, 8) : 'PROD'}-V${count}`,
+        weight: weight || variants[0]?.weight || '',
         attributes: {},
         sellingPriceRupees: variants[0]?.sellingPriceRupees || '',
         mrpRupees: variants[0]?.mrpRupees || '',
@@ -290,8 +436,8 @@ export function AdminProductFormPage() {
     const errors = {};
 
     // Validate General
-    if (!title.trim()) errors.title = 'Title is required';
-    if (!slug.trim()) errors.slug = 'Slug is required';
+    if (!title.trim() || title.trim().length < 3) errors.title = 'Title must be between 3 and 200 characters';
+    if (!slug.trim() || slug.trim().length < 3) errors.slug = 'Slug must be at least 3 characters';
     if (!categoryId) errors.categoryId = 'Category is required';
     if (!brandId) errors.brandId = 'Brand is required';
     if (!description.trim()) errors.description = 'Description is required';
@@ -309,6 +455,10 @@ export function AdminProductFormPage() {
       const sku = (v.sku || '').trim().toUpperCase();
       if (!sku) {
         errors.variants = `Variant #${i + 1} is missing a SKU`;
+        break;
+      }
+      if (sku.length < 2) {
+        errors.variants = `Variant #${i + 1} SKU '${sku}' must be at least 2 characters`;
         break;
       }
       if (skuSet.has(sku)) {
@@ -333,9 +483,12 @@ export function AdminProductFormPage() {
         break;
       }
 
+      const varWeight = parseFloat(v.weight) >= 0 ? parseFloat(v.weight) : (parseFloat(weight) || 0);
+
       processedVariants.push({
         title: v.title || 'Standard',
         sku,
+        weight: varWeight,
         attributes: v.attributes || {},
         price: Math.round(sp * 100),       // Integer paise (required by backend)
         sellingPrice: Math.round(sp * 100),// Integer paise (compatibility)
@@ -382,10 +535,13 @@ export function AdminProductFormPage() {
       order: img.order !== undefined ? img.order : (img.displayOrder !== undefined ? img.displayOrder : idx)
     }));
 
+    const topWeight = parseFloat(weight) >= 0 ? parseFloat(weight) : (processedVariants[0]?.weight || 0);
+
     const payload = {
       title: title.trim(),
       slug: slug.trim(),
       description: description.trim(),
+      weight: topWeight,
       categoryId,
       brandId,
       status,
@@ -419,7 +575,10 @@ export function AdminProductFormPage() {
       const details = err?.details || err?.response?.data?.details || err?.response?.data?.error?.details;
       let msg = err?.response?.data?.error?.message || err?.response?.data?.message || err.message || 'Failed to save product';
       if (Array.isArray(details) && details.length > 0) {
-        msg += ': ' + details.map((d) => `${d.field ? `${d.field}: ` : ''}${d.message}`).join(', ');
+        const detailsStr = details.map((d) => `${d.field ? `${d.field}: ` : ''}${d.message}`).join(', ');
+        if (!msg.includes(detailsStr)) {
+          msg += ': ' + detailsStr;
+        }
       }
       setError(msg);
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -520,49 +679,95 @@ export function AdminProductFormPage() {
               {formErrors.title && <p className="text-xs text-red-500 mt-1">{formErrors.title}</p>}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-semibold text-gray-700 uppercase">
-                    URL Slug *
-                  </label>
-                  <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={autoSlug}
-                      onChange={(e) => setAutoSlug(e.target.checked)}
-                      className="rounded text-emerald-600 focus:ring-emerald-500 w-3.5 h-3.5"
-                    />
-                    Auto-slug
-                  </label>
-                </div>
-                <Input
-                  value={slug}
-                  onChange={(e) => {
-                    setAutoSlug(false);
-                    setSlug(e.target.value);
-                  }}
-                  placeholder="e.g. ergonomic-office-desk-chair"
-                  required
-                />
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-gray-700 uppercase">
+                  URL Slug *
+                </label>
+                <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={autoSlug}
+                    onChange={(e) => setAutoSlug(e.target.checked)}
+                    className="rounded text-emerald-600 focus:ring-emerald-500 w-3.5 h-3.5"
+                  />
+                  Auto-slug
+                </label>
               </div>
+              <Input
+                value={slug}
+                onChange={(e) => {
+                  setAutoSlug(false);
+                  setSlug(e.target.value);
+                }}
+                placeholder="e.g. ergonomic-office-desk-chair"
+                required
+              />
+            </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">
-                    Category *
-                  </label>
-                  <select
-                    value={categoryId}
-                    onChange={(e) => setCategoryId(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 py-2 px-3 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
-                  >
-                    {categories.map((c) => (
-                      <option key={c._id} value={c._id}>
-                        {c.name}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-3">
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-semibold text-gray-700 uppercase">
+                        Category *
+                      </label>
+                      <Link
+                        to="/admin/categories"
+                        target="_blank"
+                        className="text-[11px] text-emerald-600 hover:text-emerald-700 font-medium hover:underline flex items-center gap-1"
+                        title="Opens Category & Subcategory manager in new tab"
+                      >
+                        + Manage / Add
+                      </Link>
+                    </div>
+                    <select
+                      value={selectedParentId}
+                      onChange={(e) => handleParentCategoryChange(e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 py-2 px-3 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                      required
+                    >
+                      <option value="" disabled>
+                        Select Category
                       </option>
-                    ))}
-                  </select>
+                      {rootCategories.map((c) => (
+                        <option key={c._id} value={c._id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Subcategory Selector: Completely Optional */}
+                  {selectedParentId && availableSubcategories.length > 0 ? (
+                    <div className="animate-in fade-in duration-150">
+                      <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">
+                        Subcategory <span className="text-gray-400 font-normal lowercase">(optional)</span>
+                      </label>
+                      <select
+                        value={selectedSubId}
+                        onChange={(e) => handleSubCategoryChange(e.target.value)}
+                        className="w-full rounded-lg border border-gray-300 py-2 px-3 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                      >
+                        <option value="">
+                          None (Assign directly to {selectedParentCategoryObj?.name})
+                        </option>
+                        {availableSubcategories.map((sub) => (
+                          <option key={sub._id} value={sub._id}>
+                            ↳ {sub.name}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-[11px] text-gray-400 mt-1">
+                        Leave as 'None' if this product doesn't need a subcategory.
+                      </p>
+                    </div>
+                  ) : selectedParentId ? (
+                    <div className="text-[11px] text-gray-500 bg-gray-50/80 p-2.5 rounded-lg border border-gray-200">
+                      <span className="font-semibold text-gray-700">✓ Direct Category:</span>{' '}
+                      <strong>{selectedParentCategoryObj?.name}</strong> has no subcategories. Product will be listed directly under this category.
+                    </div>
+                  ) : null}
                 </div>
 
                 <div>
@@ -573,16 +778,40 @@ export function AdminProductFormPage() {
                     value={brandId}
                     onChange={(e) => setBrandId(e.target.value)}
                     className="w-full rounded-lg border border-gray-300 py-2 px-3 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                    required
                   >
+                    <option value="" disabled>Select Brand</option>
                     {brands.map((b) => (
                       <option key={b._id} value={b._id}>
                         {b.name}
                       </option>
                     ))}
                   </select>
+
+                  <div className="mt-3">
+                    <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">
+                      Package Weight (Grams)
+                    </label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={weight}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setWeight(val);
+                        setVariants((prev) =>
+                          prev.map((v, i) => (i === 0 && !v.weight ? { ...v, weight: val } : v))
+                        );
+                      }}
+                      placeholder="e.g. 250 for 250g, 1000 for 1kg"
+                    />
+                    <p className="text-[11px] text-gray-400 mt-1">
+                      Shipping weight in grams (g) used for courier calculation
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
 
             <div>
               <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">
@@ -757,78 +986,202 @@ export function AdminProductFormPage() {
           )}
         </div>
 
-        {/* Card 3: Product Gallery & Images */}
+        {/* Card 3: Product Gallery & Images (Multiple Files & URL Links) */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-4">
-          <div className="border-b border-gray-100 pb-3 flex items-center justify-between">
-            <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
-              <ImageIcon className="w-5 h-5 text-emerald-600" />
-              Product Image Gallery
-            </h2>
-            <span className="text-xs text-gray-400">
-              {images.length} image{images.length === 1 ? '' : 's'} added
-            </span>
+          <div className="border-b border-gray-100 pb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+                <ImageIcon className="w-5 h-5 text-emerald-600" />
+                Product Image Gallery
+              </h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Add multiple product images via direct file upload or image URLs.
+              </p>
+            </div>
+
+            {/* Upload Method Switcher Tabs */}
+            <div className="flex items-center gap-1.5 p-1 bg-gray-100 rounded-xl self-start sm:self-auto">
+              <button
+                type="button"
+                onClick={() => setImageUploadMode('file')}
+                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${
+                  imageUploadMode === 'file'
+                    ? 'bg-white text-emerald-700 shadow-xs'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <UploadCloud className="w-3.5 h-3.5" />
+                Upload File(s)
+              </button>
+              <button
+                type="button"
+                onClick={() => setImageUploadMode('url')}
+                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${
+                  imageUploadMode === 'url'
+                    ? 'bg-white text-emerald-700 shadow-xs'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <Link2 className="w-3.5 h-3.5" />
+                Add via Link / URL
+              </button>
+            </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3">
-            <input
-              type="url"
-              value={newImageUrl}
-              onChange={(e) => setNewImageUrl(e.target.value)}
-              placeholder="Paste Image URL (Cloudinary, CDN, or HTTPS image link)..."
-              className="flex-1 rounded-lg border border-gray-300 py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
-            />
-            <input
-              type="text"
-              value={newImageAlt}
-              onChange={(e) => setNewImageAlt(e.target.value)}
-              placeholder="Alt text (e.g. Front View)"
-              className="w-full sm:w-56 rounded-lg border border-gray-300 py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
-            />
-            <Button type="button" variant="secondary" onClick={handleAddImage} className="whitespace-nowrap">
-              <Plus className="w-4 h-4 mr-1" />
-              Add Image
-            </Button>
-          </div>
+          {uploadError && (
+            <Alert type="error" message={uploadError} onClose={() => setUploadError('')} />
+          )}
 
-          {images.length > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3 pt-2">
-              {images.map((img, idx) => (
-                <div
-                  key={idx}
-                  className={`relative group rounded-xl border-2 overflow-hidden aspect-square bg-gray-50 ${
-                    img.isPrimary ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-gray-200'
-                  }`}
-                >
-                  <img src={img.url} alt={img.alt} className="w-full h-full object-cover" />
+          {/* Mode 1: Drag & Drop Multiple File Upload Box */}
+          {imageUploadMode === 'file' && (
+            <div
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              className={`border-2 border-dashed rounded-2xl p-6 sm:p-8 text-center transition-all ${
+                isDragging
+                  ? 'border-emerald-500 bg-emerald-50/50'
+                  : 'border-gray-200 hover:border-emerald-400 bg-gray-50/50'
+              }`}
+            >
+              <input
+                type="file"
+                id="product-images-input"
+                multiple
+                accept="image/jpeg,image/png,image/webp,image/avif"
+                onChange={handleFileUpload}
+                className="hidden"
+                disabled={isUploadingImages}
+              />
 
-                  {img.isPrimary && (
-                    <span className="absolute top-1.5 left-1.5 bg-emerald-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow">
-                      Primary
-                    </span>
-                  )}
-
-                  <div className="absolute inset-0 bg-gray-900/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                    {!img.isPrimary && (
-                      <button
-                        type="button"
-                        onClick={() => handleSetPrimaryImage(idx)}
-                        className="p-1.5 bg-white text-gray-800 rounded-lg hover:text-emerald-600 shadow"
-                        title="Set as Primary"
-                      >
-                        <Star className="w-4 h-4" />
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveImage(idx)}
-                      className="p-1.5 bg-white text-red-600 rounded-lg hover:bg-red-50 shadow"
-                      title="Remove"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+              {isUploadingImages ? (
+                <div className="flex flex-col items-center justify-center space-y-3 py-3">
+                  <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
+                  <p className="text-sm font-semibold text-gray-800">
+                    Uploading files to Cloudinary...
+                  </p>
+                  <p className="text-xs text-gray-400">Optimizing resolution and securing asset URLs</p>
                 </div>
-              ))}
+              ) : (
+                <label
+                  htmlFor="product-images-input"
+                  className="cursor-pointer flex flex-col items-center justify-center space-y-2.5"
+                >
+                  <div className="w-12 h-12 bg-white rounded-2xl shadow-sm border border-gray-200/80 flex items-center justify-center text-emerald-600 group-hover:scale-105 transition-transform">
+                    <UploadCloud className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-gray-900">
+                      <span className="text-emerald-600 underline">Click to upload</span> or drag and drop multiple images
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Upload high-resolution PNG, JPG, WEBP, or AVIF (Up to 10MB each)
+                    </p>
+                  </div>
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white rounded-full border border-gray-200 text-[11px] font-semibold text-gray-600 shadow-2xs">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-500" /> Multiple files supported
+                  </div>
+                </label>
+              )}
+            </div>
+          )}
+
+          {/* Mode 2: Add by URL Link */}
+          {imageUploadMode === 'url' && (
+            <div className="p-4 bg-gray-50/70 border border-gray-200/80 rounded-2xl space-y-3">
+              <div className="flex flex-col sm:flex-row gap-3">
+                <input
+                  type="url"
+                  value={newImageUrl}
+                  onChange={(e) => setNewImageUrl(e.target.value)}
+                  placeholder="Paste Image URL (e.g. https://images.unsplash.com/... or Cloudinary URL)"
+                  className="flex-1 rounded-xl border border-gray-300 py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                />
+                <input
+                  type="text"
+                  value={newImageAlt}
+                  onChange={(e) => setNewImageAlt(e.target.value)}
+                  placeholder="Alt text (e.g. Front View)"
+                  className="w-full sm:w-56 rounded-xl border border-gray-300 py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                />
+                <Button
+                  type="button"
+                  variant="primary"
+                  onClick={handleAddImageFromUrl}
+                  disabled={!newImageUrl.trim()}
+                  className="whitespace-nowrap"
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  Add Image Link
+                </Button>
+              </div>
+              <p className="text-[11px] text-gray-500">
+                Tip: Enter any direct public image link (CDN, HTTPS, Cloudinary). You can add multiple image links one by one.
+              </p>
+            </div>
+          )}
+
+          {/* Uploaded Images Gallery Grid */}
+          {images.length > 0 && (
+            <div className="space-y-3 pt-2">
+              <p className="text-xs font-bold text-gray-700 uppercase tracking-wider">
+                Uploaded Product Images ({images.length})
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {images.map((img, idx) => (
+                  <div
+                    key={idx}
+                    className={`relative rounded-2xl border-2 overflow-hidden bg-white shadow-2xs flex flex-col transition-all ${
+                      img.isPrimary
+                        ? 'border-emerald-500 ring-2 ring-emerald-500/20'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    {/* Image Preview Box */}
+                    <div className="relative aspect-square w-full bg-gray-50 overflow-hidden">
+                      <img src={img.url} alt={img.alt} className="w-full h-full object-cover" />
+
+                      {img.isPrimary && (
+                        <span className="absolute top-2 left-2 bg-emerald-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm flex items-center gap-1">
+                          <Star className="w-3 h-3 fill-white" /> Primary Image
+                        </span>
+                      )}
+
+                      <div className="absolute top-2 right-2 flex items-center gap-1">
+                        {!img.isPrimary && (
+                          <button
+                            type="button"
+                            onClick={() => handleSetPrimaryImage(idx)}
+                            className="p-1.5 bg-white/90 backdrop-blur-xs text-gray-700 hover:text-emerald-700 hover:bg-white rounded-xl shadow-xs transition-colors"
+                            title="Set as Primary Cover Image"
+                          >
+                            <Star className="w-4 h-4" />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveImage(idx)}
+                          className="p-1.5 bg-white/90 backdrop-blur-xs text-rose-600 hover:bg-rose-50 rounded-xl shadow-xs transition-colors"
+                          title="Remove image"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Alt Text Input */}
+                    <div className="p-2.5 bg-gray-50/70 border-t border-gray-100">
+                      <input
+                        type="text"
+                        value={img.alt || ''}
+                        onChange={(e) => handleUpdateImageAlt(idx, e.target.value)}
+                        placeholder="Image Alt text (e.g. Front View)"
+                        className="w-full text-xs bg-white rounded-lg border border-gray-200 px-2 py-1 text-gray-700 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -878,7 +1231,7 @@ export function AdminProductFormPage() {
                     )}
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-7 gap-3">
                     <div className="md:col-span-2">
                       <label className="block text-[11px] font-semibold text-gray-600 uppercase mb-1">
                         Variant Title *
@@ -904,6 +1257,21 @@ export function AdminProductFormPage() {
                         placeholder="e.g. PROD-XL-01"
                         className="w-full rounded-lg border border-gray-300 py-1.5 px-3 text-xs font-mono bg-white uppercase focus:outline-none focus:ring-2 focus:ring-emerald-500"
                         required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-gray-600 uppercase mb-1">
+                        Weight (g)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={v.weight !== undefined ? v.weight : ''}
+                        onChange={(e) => handleVariantChange(idx, 'weight', e.target.value)}
+                        placeholder="e.g. 250"
+                        className="w-full rounded-lg border border-gray-300 py-1.5 px-3 text-xs bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                       />
                     </div>
 

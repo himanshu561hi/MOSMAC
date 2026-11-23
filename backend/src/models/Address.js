@@ -36,7 +36,7 @@ const addressSchema = new mongoose.Schema(
     },
     addressLine2: {
       type: String,
-      required: [true, 'Street / Area / Locality is required'],
+      default: '',
       trim: true,
       maxlength: [150, 'Address line cannot exceed 150 characters']
     },

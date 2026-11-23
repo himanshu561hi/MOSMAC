@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { Refund } from '../models/Refund.js';
 import { Order } from '../models/Order.js';
 import { Payment } from '../models/Payment.js';
@@ -25,7 +26,12 @@ export const refundService = {
       throw ApiError.badRequest('A refund reason must be documented', ERROR_CODES.VALIDATION_ERROR);
     }
 
-    const order = await Order.findById(orderId);
+    let order;
+    if (mongoose.isValidObjectId(orderId)) {
+      order = await Order.findById(orderId);
+    } else {
+      order = await Order.findOne({ $or: [{ _id: orderId }, { orderNumber: orderId }] });
+    }
     if (!order) {
       throw ApiError.notFound('Order not found', ERROR_CODES.RESOURCE_NOT_FOUND);
     }

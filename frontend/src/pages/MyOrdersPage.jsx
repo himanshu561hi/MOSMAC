@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import Button from '@/components/common/Button';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
+import Pagination from '@/components/common/Pagination';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { fetchCustomerOrders } from '@/store/slices/orderSlice';
 
@@ -227,26 +228,15 @@ export function MyOrdersPage() {
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex justify-center items-center gap-2 pt-6">
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={currentPage <= 1}
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              >
-                Previous
-              </Button>
-              <span className="text-xs font-semibold text-gray-600">
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-3 pt-6 border-t border-gray-100 text-xs text-gray-500">
+              <span>
                 Page {page} of {totalPages}
               </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={currentPage >= totalPages}
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              >
-                Next
-              </Button>
+              <Pagination
+                totalPages={totalPages}
+                value={currentPage}
+                onChange={setCurrentPage}
+              />
             </div>
           )}
         </div>

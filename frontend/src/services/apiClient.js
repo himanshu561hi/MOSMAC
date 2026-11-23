@@ -1,6 +1,13 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+const rawBaseUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '/api/v1';
+const API_BASE_URL = rawBaseUrl.endsWith('/api/v1')
+  ? rawBaseUrl
+  : rawBaseUrl.endsWith('/')
+  ? `${rawBaseUrl}api/v1`
+  : rawBaseUrl.startsWith('http')
+  ? `${rawBaseUrl}/api/v1`
+  : rawBaseUrl;
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -39,8 +46,15 @@ export const getAccessToken = () => {
 export const getGuestId = () => {
   if (typeof window === 'undefined') return null;
   let guestId = localStorage.getItem('aurora_guest_id');
+  if (!guestId && typeof document !== 'undefined') {
+    const cookieMatch = document.cookie.match(/(?:^|;\s*)guest_id=([^;]+)/);
+    if (cookieMatch && cookieMatch[1]) {
+      guestId = decodeURIComponent(cookieMatch[1]);
+      localStorage.setItem('aurora_guest_id', guestId);
+    }
+  }
   if (!guestId) {
-    guestId = 'gst_' + (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15));
+    guestId = 'gst_' + (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID().replace(/-/g, '') : Math.random().toString(36).substring(2, 15));
     localStorage.setItem('aurora_guest_id', guestId);
   }
   return guestId;
@@ -66,7 +80,7 @@ apiClient.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
     if (typeof window !== 'undefined') {
-      const guestId = localStorage.getItem('aurora_guest_id');
+      const guestId = getGuestId();
       if (guestId) {
         config.headers['x-guest-id'] = guestId;
       }
@@ -92,7 +106,12 @@ const processQueue = (error, token = null) => {
 
 // Response interceptor: automatically rotate and refresh session on 401
 apiClient.interceptors.response.use(
-  (response) => response.data,
+  (response) => {
+    if (typeof window !== 'undefined' && response.headers?.['x-guest-id']) {
+      localStorage.setItem('aurora_guest_id', response.headers['x-guest-id']);
+    }
+    return response.data;
+  },
   async (error) => {
     const originalRequest = error.config;
 
@@ -156,4 +175,6 @@ apiClient.interceptors.response.use(
     return Promise.reject(error.response?.data || error);
   }
 );
+
+export default apiClient;
 

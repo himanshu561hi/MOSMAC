@@ -1,5 +1,7 @@
 import { Cart } from '../models/Cart.js';
 import { Product } from '../models/Product.js';
+import '../models/Category.js';
+import '../models/Brand.js';
 import { ApiError } from '../utils/ApiError.js';
 import { validateCouponEligibility } from './couponService.js';
 

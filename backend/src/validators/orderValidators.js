@@ -3,12 +3,50 @@ import { z } from 'zod';
 const indianPhoneRegex = /^[6-9]\d{9}$/;
 const indianPincodeRegex = /^[1-9][0-9]{5}$/;
 
+export const normalizeAddressPayload = (val) => {
+  if (typeof val === 'object' && val !== null) {
+    const street = (val.street || '').trim();
+    let line1 = (val.addressLine1 || '').trim();
+    let line2 = (val.addressLine2 || '').trim();
+
+    if (!line1 && street) {
+      if (street.includes(',')) {
+        const parts = street.split(',');
+        line1 = parts[0].trim();
+        line2 = line2 || parts.slice(1).join(',').trim() || line1;
+      } else {
+        line1 = street;
+        line2 = line2 || (val.landmark || '').trim() || street;
+      }
+    } else if (line1 && !line2) {
+      line2 = (val.landmark || '').trim() || line1;
+    }
+
+    // Clean phone number: strip non-digits and leading +91 / 0
+    let phone = (val.phone || '').toString().replace(/\D/g, '');
+    if (phone.length === 12 && phone.startsWith('91')) {
+      phone = phone.slice(2);
+    }
+    if (phone.length === 11 && phone.startsWith('0')) {
+      phone = phone.slice(1);
+    }
+
+    return {
+      ...val,
+      phone: phone || val.phone,
+      addressLine1: line1 || street || 'Address Line 1',
+      addressLine2: line2 || (val.landmark || '').trim() || line1 || street || 'Address Line 2'
+    };
+  }
+  return val;
+};
+
 export const addressSchema = z.object({
   fullName: z.string().min(2, 'Full name must be at least 2 characters').max(100),
   phone: z.string().regex(indianPhoneRegex, 'Please enter a valid 10-digit Indian mobile number'),
   email: z.string().email('Please enter a valid email address').optional().or(z.literal('')),
-  addressLine1: z.string().min(3, 'House/Flat/Building is required').max(150),
-  addressLine2: z.string().min(3, 'Street/Area/Locality is required').max(150),
+  addressLine1: z.string().min(1, 'House/Flat/Building is required').max(150),
+  addressLine2: z.string().max(150).optional().default(''),
   landmark: z.string().max(100).optional().or(z.literal('')),
   city: z.string().min(2, 'City/District is required'),
   state: z.string().min(2, 'State is required'),
@@ -25,18 +63,20 @@ export const checkoutQuoteSchema = z.object({
       sku: z.string().min(1, 'SKU is required'),
       quantity: z.number().int().min(1).max(10)
     })
-  ).min(1, 'At least one item is required in checkout'),
+  ).min(1, 'At least one item is required in checkout').optional(),
   couponCode: z.string().optional().or(z.literal('')),
   postalCode: z.string().regex(indianPincodeRegex, 'Invalid 6-digit Indian PIN code').optional().or(z.literal(''))
 });
 
+export const customerSchema = z.object({
+  firstName: z.string().min(1, 'First name is required'),
+  lastName: z.string().optional().default(''),
+  email: z.string().email('Valid email is required'),
+  phone: z.string().regex(indianPhoneRegex, 'Valid 10-digit Indian phone is required')
+});
+
 export const createOrderSchema = z.object({
-  customer: z.object({
-    firstName: z.string().min(1, 'First name is required'),
-    lastName: z.string().optional().default(''),
-    email: z.string().email('Valid email is required'),
-    phone: z.string().regex(indianPhoneRegex, 'Valid 10-digit Indian phone is required')
-  }),
+  customer: customerSchema,
   items: z.array(
     z.object({
       productId: z.string().min(1, 'Product ID is required'),
@@ -44,8 +84,8 @@ export const createOrderSchema = z.object({
       quantity: z.number().int().min(1).max(10)
     })
   ).min(1, 'At least one item is required'),
-  shippingAddress: addressSchema,
-  billingAddress: addressSchema.optional(),
+  shippingAddress: z.preprocess(normalizeAddressPayload, addressSchema),
+  billingAddress: z.preprocess(normalizeAddressPayload, addressSchema).optional(),
   couponCode: z.string().optional().or(z.literal('')),
   paymentMethod: z.enum(['razorpay', 'cod']),
   idempotencyKey: z.string().optional()

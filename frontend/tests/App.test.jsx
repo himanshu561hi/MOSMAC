@@ -39,7 +39,7 @@ describe('Frontend Foundation Tests', () => {
 
   it('renders complete App storefront without throwing errors', () => {
     render(<App />);
-    const brandElements = screen.getAllByText(/AURORA/i);
+    const brandElements = screen.getAllByText(/MOSMAC/i);
     expect(brandElements.length).toBeGreaterThan(0);
     expect(screen.getByText(/Pan-India Express Delivery/i)).toBeInTheDocument();
   });

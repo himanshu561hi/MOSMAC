@@ -34,16 +34,22 @@ import AdminAnalyticsPage from '@/pages/admin/AdminAnalyticsPage';
 import AdminAuditLogsPage from '@/pages/admin/AdminAuditLogsPage';
 import AdminCmsDashboardPage from '@/pages/admin/AdminCmsDashboardPage';
 import AdminHomepageBuilderPage from '@/pages/admin/AdminHomepageBuilderPage';
+import AdminHomepageSectionsPage from '@/pages/admin/AdminHomepageSectionsPage';
+import AdminHomepageSettingsPage from '@/pages/admin/AdminHomepageSettingsPage';
 import AdminBannersPage from '@/pages/admin/AdminBannersPage';
-import AdminPagesPage from '@/pages/admin/AdminPagesPage';
-import AdminFaqsPage from '@/pages/admin/AdminFaqsPage';
-import AdminNavigationPage from '@/pages/admin/AdminNavigationPage';
+import AdminWhatsNewPage from '@/pages/admin/AdminWhatsNewPage';
 import AdminSettingsPage from '@/pages/admin/AdminSettingsPage';
 import AdminTemplatesPage from '@/pages/admin/AdminTemplatesPage';
 import AdminMediaLibraryPage from '@/pages/admin/AdminMediaLibraryPage';
 import AdminReviewsPage from '@/pages/admin/AdminReviewsPage';
 import ContentPage from '@/pages/ContentPage';
 import FaqPage from '@/pages/FaqPage';
+import CategoryPage from '@/pages/CategoryPage';
+import WhatsNewPage from '@/pages/WhatsNewPage';
+import MosmacSelectPage from '@/pages/MosmacSelectPage';
+import OffersDealsPage from '@/pages/OffersDealsPage';
+import AdminOffersDealsPage from '@/pages/admin/AdminOffersDealsPage';
+import BrandsPage from '@/pages/BrandsPage';
 import LoginPage from '@/features/auth/LoginPage';
 import RegisterPage from '@/features/auth/RegisterPage';
 import ForgotPasswordPage from '@/features/auth/ForgotPasswordPage';
@@ -59,9 +65,16 @@ export function AppRoutes() {
       <Route element={<StorefrontLayout />}>
         <Route index element={<HomePage />} />
         <Route path="/products" element={<ProductListingPage />} />
-        <Route path="/category/:categorySlug" element={<ProductListingPage />} />
+        <Route path="/brands" element={<BrandsPage />} />
+        <Route path="/brand/:brandSlug" element={<ProductListingPage />} />
+        <Route path="/category/:categorySlug" element={<CategoryPage />} />
+        <Route path="/whats-new" element={<WhatsNewPage />} />
+        <Route path="/mosmac-select" element={<MosmacSelectPage />} />
+        <Route path="/offers" element={<OffersDealsPage />} />
+        <Route path="/offers-and-deals" element={<OffersDealsPage />} />
         <Route path="/search" element={<ProductListingPage />} />
         <Route path="/product/:slug" element={<ProductDetailPage />} />
+        <Route path="/products/:slug" element={<ProductDetailPage />} />
         <Route path="/cart" element={<CartPage />} />
         <Route path="/wishlist" element={<WishlistPage />} />
         <Route path="/checkout" element={<CheckoutPage />} />
@@ -97,7 +110,7 @@ export function AppRoutes() {
           path="/account/orders"
           element={
             <ProtectedRoute>
-              <MyOrdersPage />
+              <AccountPage defaultTab="orders" />
             </ProtectedRoute>
           }
         />
@@ -138,17 +151,20 @@ export function AppRoutes() {
         <Route path="customers" element={<AdminCustomersPage />} />
         <Route path="customers/:id" element={<AdminCustomerDetailPage />} />
         <Route path="coupons" element={<AdminCouponsPage />} />
+        <Route path="offers-deals" element={<AdminOffersDealsPage />} />
         <Route path="payments" element={<AdminPaymentsPage />} />
         <Route path="staff" element={<AdminStaffPage />} />
         <Route path="analytics" element={<AdminAnalyticsPage />} />
         <Route path="audit-logs" element={<AdminAuditLogsPage />} />
+        {/* Homepage Section & Product Management */}
+        <Route path="homepage-sections" element={<AdminHomepageSectionsPage />} />
+        <Route path="homepage-sections/settings" element={<AdminHomepageSettingsPage />} />
         {/* CMS & Storefront Operations */}
+        <Route path="banners" element={<AdminBannersPage />} />
         <Route path="cms" element={<AdminCmsDashboardPage />} />
         <Route path="cms/homepage" element={<AdminHomepageBuilderPage />} />
+        <Route path="cms/whats-new" element={<AdminWhatsNewPage />} />
         <Route path="cms/banners" element={<AdminBannersPage />} />
-        <Route path="cms/pages" element={<AdminPagesPage />} />
-        <Route path="cms/faqs" element={<AdminFaqsPage />} />
-        <Route path="cms/navigation" element={<AdminNavigationPage />} />
         <Route path="cms/settings" element={<AdminSettingsPage />} />
         <Route path="cms/templates" element={<AdminTemplatesPage />} />
         <Route path="settings" element={<AdminSettingsPage />} />

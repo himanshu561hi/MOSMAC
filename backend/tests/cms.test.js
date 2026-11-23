@@ -695,6 +695,22 @@ describe('Phase 8 — CMS, Content & Storefront Customization Test Suite', () =>
   describe('8. Media Asset Registry & Reference Safety Checks', () => {
     let createdAssetId;
 
+    it('should upload multiple image files and record them in registry', async () => {
+      const buffer = Buffer.from('fake image data');
+      const res = await request(app)
+        .post('/api/v1/media/upload')
+        .set('Authorization', `Bearer ${superAdminToken}`)
+        .attach('images', buffer, 'product-front.jpg')
+        .attach('images', buffer, 'product-back.png');
+
+      expect(res.status).toBe(201);
+      expect(res.body.success).toBe(true);
+      expect(Array.isArray(res.body.data.images)).toBe(true);
+      expect(res.body.data.images).toHaveLength(2);
+      expect(res.body.data.images[0].url).toBeDefined();
+      expect(res.body.data.images[0].publicId).toBeDefined();
+    });
+
     it('should register uploaded media asset', async () => {
       const res = await request(app)
         .post('/api/v1/media/assets')

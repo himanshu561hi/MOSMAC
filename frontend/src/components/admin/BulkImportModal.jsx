@@ -67,6 +67,7 @@ export const BulkImportModal = ({
   };
 
   const handleClose = () => {
+    if (loading) return; // Prevent closing while execution is active
     handleReset();
     onClose();
   };
@@ -171,23 +172,46 @@ export const BulkImportModal = ({
     try {
       setLoading(true);
       setError(null);
+      setStep(3); // Transition to Step 3 (Execution & Report) immediately
+      const total = validationData.validRows || validationData.totalRows || 0;
+      setProgress({
+        current: 0,
+        total,
+        text: 'Initiating upload and transferring images to Cloudinary...',
+        imagesUploaded: 0,
+        imagesSkipped: 0
+      });
 
-      // Start status polling if images or substantial rows
-      if (validationData.hasImagesZip || validationData.totalRows > 15) {
+      // Poll every 800ms to update progress in real-time
+      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+      if (typeof bulkImportService.getJobStatus === 'function') {
         pollTimerRef.current = setInterval(async () => {
           try {
             const status = await bulkImportService.getJobStatus(validationData.jobId);
             if (status) {
               setProgress({
                 current: status.progressCurrent || 0,
-                total: status.progressTotal || validationData.totalRows,
-                text: status.progressStep || `Processing (${status.progressCurrent}/${status.progressTotal})...`
+                total: status.progressTotal || total,
+                text: status.progressStep || `Uploading images (${status.progressCurrent || 0}/${status.progressTotal || total})...`,
+                imagesUploaded: status.imagesUploaded || 0,
+                imagesSkipped: status.imagesSkipped || 0
               });
+
+              if (status.status === 'completed') {
+                if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+                setExecutionResult(status);
+                setLoading(false);
+                if (onSuccess) onSuccess();
+              } else if (status.status === 'failed') {
+                if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+                setError(status.summary || 'Import job failed on server.');
+                setLoading(false);
+              }
             }
           } catch {
-            // ignore polling network tick errors
+            // ignore transient poll network blip
           }
-        }, 1000);
+        }, 800);
       }
 
       const executeArgs = [module, validationData.jobId, importMode];
@@ -197,14 +221,27 @@ export const BulkImportModal = ({
 
       const res = await bulkImportService.executeImport(...executeArgs);
 
-      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-      setExecutionResult(res);
-      setStep(3);
-      if (onSuccess) onSuccess();
+      if (res && res.status !== 'processing') {
+        if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+        setExecutionResult(res);
+        setLoading(false);
+        if (onSuccess) onSuccess();
+      }
     } catch (err) {
+      const errMsg = err.response?.data?.message || err.message || '';
+      // If error is timeout, network error, or job already processing, DO NOT unlock button or abort!
+      // The background job is still actively running on the backend; continue polling!
+      if (
+        errMsg.includes('currently being processed') ||
+        errMsg.includes('timeout') ||
+        errMsg.includes('Network Error') ||
+        err.code === 'ECONNABORTED'
+      ) {
+        console.log('[Bulk Import] Server is actively executing import in background, maintaining progress polling...');
+        return;
+      }
       if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-      setError(err.response?.data?.message || err.message || 'Import execution failed.');
-    } finally {
+      setError(errMsg || 'Import execution failed.');
       setLoading(false);
     }
   };
@@ -238,7 +275,12 @@ export const BulkImportModal = ({
           </div>
           <button
             onClick={handleClose}
-            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
+            disabled={loading}
+            className={`p-1.5 rounded-lg transition ${
+              loading
+                ? 'text-slate-600 cursor-not-allowed opacity-50'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
           >
             <X className="w-5 h-5" />
           </button>
@@ -705,80 +747,146 @@ export const BulkImportModal = ({
             </div>
           )}
 
-          {/* STEP 3: EXECUTION RESULTS & PROGRESS */}
-          {step === 3 && executionResult && (
-            <div className="text-center py-6 space-y-6">
-              <div className="w-16 h-16 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full flex items-center justify-center mx-auto">
-                <CheckCircle2 className="w-8 h-8" />
-              </div>
-
-              <div>
-                <h3 className="text-xl font-semibold text-white">Import Execution Completed</h3>
-                <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
-                  {executionResult.summary || 'Records and images have been processed in accordance with your chosen import mode.'}
-                </p>
-              </div>
-
-              {/* Summary Cards */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 max-w-lg mx-auto">
-                <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-lg">
-                  <p className="text-xs text-slate-400">Total Rows</p>
-                  <p className="text-lg font-bold text-white mt-1">{executionResult.totalRows}</p>
-                </div>
-                <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
-                  <p className="text-xs text-emerald-400">Created</p>
-                  <p className="text-lg font-bold text-emerald-400 mt-1">{executionResult.createdCount}</p>
-                </div>
-                <div className="p-3 bg-teal-500/10 border border-teal-500/20 rounded-lg">
-                  <p className="text-xs text-teal-400">Updated</p>
-                  <p className="text-lg font-bold text-teal-400 mt-1">{executionResult.updatedCount}</p>
-                </div>
-                <div className="p-3 bg-slate-800/40 border border-slate-800 rounded-lg">
-                  <p className="text-xs text-slate-400">Skipped</p>
-                  <p className="text-lg font-bold text-slate-400 mt-1">{executionResult.skippedCount}</p>
-                </div>
-              </div>
-
-              {/* Images Execution Metrics (If images were handled) */}
-              {(executionResult.imagesUploaded > 0 || executionResult.imagesSkipped > 0) && (
-                <div className="grid grid-cols-2 gap-3 max-w-md mx-auto pt-1">
-                  <div className="p-3 bg-teal-500/10 border border-teal-500/20 rounded-lg">
-                    <p className="text-xs text-teal-400">Images Uploaded</p>
-                    <p className="text-lg font-bold text-teal-300 mt-1">{executionResult.imagesUploaded}</p>
+          {/* STEP 3: EXECUTION IN PROGRESS, COMPLETED REPORT OR ERROR */}
+          {step === 3 && (
+            <div className="py-2 space-y-6">
+              {/* STATE A: EXECUTION IN PROGRESS */}
+              {(loading || (!executionResult && !error)) && (
+                <div className="py-6 px-4 max-w-xl mx-auto space-y-6 text-center animate-in fade-in">
+                  <div className="relative w-16 h-16 mx-auto">
+                    <div className="absolute inset-0 rounded-full bg-emerald-500/20 animate-ping" />
+                    <div className="relative w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                      <UploadCloud className="w-8 h-8 animate-bounce" />
+                    </div>
                   </div>
-                  <div className="p-3 bg-slate-800/40 border border-slate-700/50 rounded-lg">
-                    <p className="text-xs text-slate-400">Duplicates Skipped</p>
-                    <p className="text-lg font-bold text-slate-300 mt-1">{executionResult.imagesSkipped}</p>
+
+                  <div>
+                    <h3 className="text-lg font-semibold text-white">Importing Records & Uploading Images</h3>
+                    <p className="text-xs text-slate-400 mt-1">
+                      {progress.text || 'Transferring images to Cloudinary and writing catalog records...'}
+                    </p>
+                  </div>
+
+                  {/* Progress Bar */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs font-mono text-slate-400">
+                      <span>Overall Progress</span>
+                      <span className="text-emerald-400 font-semibold">
+                        {progress.total > 0 ? Math.min(100, Math.round((progress.current / progress.total) * 100)) : 0}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-800 rounded-full h-3 overflow-hidden p-0.5 border border-slate-700">
+                      <div
+                        className="bg-gradient-to-r from-emerald-500 to-teal-400 h-full rounded-full transition-all duration-300"
+                        style={{
+                          width: `${progress.total > 0 ? Math.min(100, Math.round((progress.current / progress.total) * 100)) : 0}%`
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Live Stat Badges */}
+                  <div className="grid grid-cols-3 gap-3 text-left">
+                    <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-lg">
+                      <p className="text-[11px] text-slate-400">Products</p>
+                      <p className="text-sm font-bold text-white font-mono mt-0.5">
+                        {progress.current} / {progress.total}
+                      </p>
+                    </div>
+                    <div className="p-3 bg-teal-500/10 border border-teal-500/20 rounded-lg">
+                      <p className="text-[11px] text-teal-400">Images Uploaded</p>
+                      <p className="text-sm font-bold text-teal-300 font-mono mt-0.5">
+                        {progress.imagesUploaded || 0}
+                      </p>
+                    </div>
+                    <div className="p-3 bg-slate-800/40 border border-slate-700/50 rounded-lg">
+                      <p className="text-[11px] text-slate-400">Duplicates Skipped</p>
+                      <p className="text-sm font-bold text-slate-300 font-mono mt-0.5">
+                        {progress.imagesSkipped || 0}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-slate-800/30 rounded-lg border border-slate-800 text-[11px] text-slate-400 flex items-center justify-center gap-2">
+                    <RefreshCw className="w-3.5 h-3.5 text-emerald-400 animate-spin" />
+                    <span>Please do not close this modal or refresh while images are uploading.</span>
                   </div>
                 </div>
               )}
 
-              <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={handleDownloadReport}
-                  className="px-4 py-2.5 text-xs font-medium text-slate-200 bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700 transition flex items-center gap-2"
-                >
-                  <Download className="w-4 h-4 text-emerald-400" />
-                  Download Execution Report (.xlsx)
-                </button>
-              </div>
-            </div>
-          )}
+              {/* STATE B: EXECUTION COMPLETED */}
+              {executionResult && (
+                <div className="text-center py-4 space-y-6 animate-in fade-in">
+                  <div className="w-16 h-16 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full flex items-center justify-center mx-auto">
+                    <CheckCircle2 className="w-8 h-8" />
+                  </div>
 
-          {/* LOADING & PROGRESS OVERLAY DURING EXECUTION */}
-          {loading && step === 2 && (
-            <div className="p-6 bg-slate-950/80 border border-slate-800 rounded-xl space-y-3 text-center">
-              <RefreshCw className="w-6 h-6 animate-spin text-emerald-400 mx-auto" />
-              <p className="text-xs font-medium text-white">
-                {progress.text || 'Importing records & uploading images...'}
-              </p>
-              {progress.total > 0 && (
-                <div className="w-full max-w-md mx-auto bg-slate-800 rounded-full h-2 overflow-hidden">
-                  <div
-                    className="bg-emerald-500 h-2 transition-all duration-300"
-                    style={{ width: `${Math.round((progress.current / progress.total) * 100)}%` }}
-                  />
+                  <div>
+                    <h3 className="text-xl font-semibold text-white">Import Execution Completed</h3>
+                    <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+                      {executionResult.summary || 'Records and images have been processed in accordance with your chosen import mode.'}
+                    </p>
+                  </div>
+
+                  {/* Summary Cards */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 max-w-lg mx-auto">
+                    <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-lg">
+                      <p className="text-xs text-slate-400">Total Rows</p>
+                      <p className="text-lg font-bold text-white mt-1">{executionResult.totalRows}</p>
+                    </div>
+                    <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
+                      <p className="text-xs text-emerald-400">Created</p>
+                      <p className="text-lg font-bold text-emerald-400 mt-1">{executionResult.createdCount}</p>
+                    </div>
+                    <div className="p-3 bg-teal-500/10 border border-teal-500/20 rounded-lg">
+                      <p className="text-xs text-teal-400">Updated</p>
+                      <p className="text-lg font-bold text-teal-400 mt-1">{executionResult.updatedCount}</p>
+                    </div>
+                    <div className="p-3 bg-slate-800/40 border border-slate-800 rounded-lg">
+                      <p className="text-xs text-slate-400">Skipped</p>
+                      <p className="text-lg font-bold text-slate-400 mt-1">{executionResult.skippedCount}</p>
+                    </div>
+                  </div>
+
+                  {/* Images Execution Metrics (If images were handled) */}
+                  {(executionResult.imagesUploaded > 0 || executionResult.imagesSkipped > 0) && (
+                    <div className="grid grid-cols-2 gap-3 max-w-md mx-auto pt-1">
+                      <div className="p-3 bg-teal-500/10 border border-teal-500/20 rounded-lg">
+                        <p className="text-xs text-teal-400">Images Uploaded</p>
+                        <p className="text-lg font-bold text-teal-300 mt-1">{executionResult.imagesUploaded}</p>
+                      </div>
+                      <div className="p-3 bg-slate-800/40 border border-slate-700/50 rounded-lg">
+                        <p className="text-xs text-slate-400">Duplicates Skipped</p>
+                        <p className="text-lg font-bold text-slate-300 mt-1">{executionResult.imagesSkipped}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={handleDownloadReport}
+                      className="px-4 py-2.5 text-xs font-medium text-slate-200 bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700 transition flex items-center gap-2"
+                    >
+                      <Download className="w-4 h-4 text-emerald-400" />
+                      Download Execution Report (.xlsx)
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* STATE C: EXECUTION FAILED */}
+              {error && !loading && !executionResult && (
+                <div className="text-center py-6 space-y-4 max-w-md mx-auto animate-in fade-in">
+                  <div className="w-16 h-16 bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-full flex items-center justify-center mx-auto">
+                    <XCircle className="w-8 h-8" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-white">Import Execution Failed</h3>
+                    <p className="text-xs text-rose-300 mt-1">
+                      {error}
+                    </p>
+                  </div>
                 </div>
               )}
             </div>
@@ -843,14 +951,51 @@ export const BulkImportModal = ({
           )}
 
           {step === 3 && (
-            <div className="w-full flex justify-end">
-              <button
-                type="button"
-                onClick={handleClose}
-                className="px-5 py-2 text-xs font-semibold text-slate-950 bg-emerald-400 hover:bg-emerald-300 rounded-lg transition shadow-lg shadow-emerald-500/20"
-              >
-                Done
-              </button>
+            <div className="w-full flex items-center justify-between">
+              {loading ? (
+                <>
+                  <div className="flex items-center gap-2 text-xs text-slate-400">
+                    <RefreshCw className="w-3.5 h-3.5 text-emerald-400 animate-spin" />
+                    <span>Upload & import in progress...</span>
+                  </div>
+                  <button
+                    type="button"
+                    disabled
+                    className="px-5 py-2 text-xs font-semibold text-slate-400 bg-slate-800 rounded-lg cursor-wait flex items-center gap-2 border border-slate-700/50"
+                  >
+                    <RefreshCw className="w-4 h-4 animate-spin text-emerald-400" />
+                    Uploading ({progress.current}/{progress.total})...
+                  </button>
+                </>
+              ) : error && !executionResult ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => { setStep(2); setError(null); }}
+                    className="px-4 py-2 text-xs font-medium text-slate-400 hover:text-white rounded-lg transition"
+                  >
+                    Back to Validation
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleExecute}
+                    className="px-5 py-2 text-xs font-semibold text-slate-950 bg-emerald-400 hover:bg-emerald-300 rounded-lg transition flex items-center gap-2 shadow-lg shadow-emerald-500/20"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    Retry Import
+                  </button>
+                </>
+              ) : (
+                <div className="w-full flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleClose}
+                    className="px-5 py-2 text-xs font-semibold text-slate-950 bg-emerald-400 hover:bg-emerald-300 rounded-lg transition shadow-lg shadow-emerald-500/20"
+                  >
+                    Done
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>

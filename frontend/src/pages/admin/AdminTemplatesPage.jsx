@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { cmsService } from '../../services/cmsService';
 import {
   Mail,
@@ -8,7 +9,8 @@ import {
   AlertCircle,
   Loader2,
   Copy,
-  Code
+  Code,
+  ArrowLeft
 } from 'lucide-react';
 
 export function AdminTemplatesPage() {
@@ -107,6 +109,17 @@ export function AdminTemplatesPage() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
+      {/* Back to CMS Hub button */}
+      <div>
+        <Link
+          to="/admin/cms"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-emerald-700 bg-white border border-gray-200 px-3 py-1.5 rounded-lg shadow-2xs hover:bg-gray-50 transition-colors"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          Back to CMS Hub
+        </Link>
+      </div>
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>

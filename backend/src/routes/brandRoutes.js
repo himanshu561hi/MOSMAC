@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   getBrands,
   getBrandBySlug,
+  getBrandDeletePreview,
   createBrand,
   updateBrand,
   deleteBrand
@@ -16,6 +17,14 @@ export const brandRoutes = Router();
 // Public routes
 brandRoutes.get('/', optionalAuthenticate, getBrands);
 brandRoutes.get('/:slug', getBrandBySlug);
+
+// Admin preview route
+brandRoutes.get(
+  '/:id/delete-preview',
+  authenticate,
+  authorize(ROLES.SUPER_ADMIN, ROLES.STORE_MANAGER),
+  getBrandDeletePreview
+);
 
 // Admin mutation routes
 brandRoutes.post(

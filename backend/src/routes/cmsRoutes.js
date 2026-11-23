@@ -27,6 +27,7 @@ export const cmsRoutes = Router();
 
 cmsRoutes.get('/homepage', cmsController.getDynamicHomepageSections);
 cmsRoutes.get('/banners', cmsController.listPublicBanners);
+cmsRoutes.get('/whats-new', cmsController.getWhatsNewData);
 cmsRoutes.get('/pages/:slug', cmsController.getPublicPageBySlug);
 cmsRoutes.get('/faqs', cmsController.listPublicFaqs);
 cmsRoutes.get('/settings', cmsController.getPublicStoreSettings);
@@ -59,6 +60,10 @@ adminCmsRouter.get('/pages', cmsController.listAdminPages);
 adminCmsRouter.post('/pages', validate(createPageSchema), cmsController.createPage);
 adminCmsRouter.patch('/pages/:id', validate(updatePageSchema), cmsController.updatePage);
 adminCmsRouter.delete('/pages/:id', cmsController.deletePage);
+
+// 3.1 What's New Page Section Config
+adminCmsRouter.get('/whats-new', cmsController.getAdminWhatsNewConfig);
+adminCmsRouter.patch('/whats-new', cmsController.updateAdminWhatsNewConfig);
 
 // 4. FAQs
 adminCmsRouter.get('/faqs', cmsController.listAdminFaqs);

@@ -1,10 +1,18 @@
 import { Router } from 'express';
-import { getUploadSignature, deleteAsset } from '../controllers/mediaController.js';
+import multer from 'multer';
+import { getUploadSignature, deleteAsset, uploadImages } from '../controllers/mediaController.js';
 import * as mediaAssetController from '../controllers/mediaAssetController.js';
 import { authenticate, authorize } from '../middlewares/auth.js';
 import { validate } from '../middlewares/validate.js';
 import { ROLES } from '../constants/roles.js';
 import { recordMediaAssetSchema } from '../validators/cmsValidators.js';
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10 MB per file
+  }
+});
 
 export const mediaRoutes = Router();
 
@@ -12,6 +20,7 @@ export const mediaRoutes = Router();
 mediaRoutes.use(authenticate);
 mediaRoutes.use(authorize(ROLES.SUPER_ADMIN, ROLES.STORE_MANAGER));
 
+mediaRoutes.post('/upload', upload.array('images', 10), uploadImages);
 mediaRoutes.get('/signature', getUploadSignature);
 mediaRoutes.post('/delete', deleteAsset);
 

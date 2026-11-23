@@ -5,6 +5,7 @@ import Button from '@/components/common/Button';
 import Input from '@/components/common/Input';
 import Alert from '@/components/common/Alert';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
+import Pagination from '@/components/common/Pagination';
 import { BulkActionButtons } from '@/components/admin/BulkActionButtons';
 import {
   Boxes,
@@ -374,31 +375,16 @@ export function AdminInventoryPage() {
 
         {/* Pagination Bar */}
         {pagination.totalPages > 1 && (
-          <div className="p-4 border-t border-gray-100 flex items-center justify-between text-sm text-gray-500">
+          <div className="p-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-gray-500">
             <div>
               Showing Page <span className="font-semibold text-gray-900">{pagination.page}</span> of{' '}
               <span className="font-semibold text-gray-900">{pagination.totalPages}</span> ({pagination.total} SKUs)
             </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                <ChevronLeft className="w-4 h-4 mr-1" />
-                Previous
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={page >= pagination.totalPages}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Next
-                <ChevronRight className="w-4 h-4 ml-1" />
-              </Button>
-            </div>
+            <Pagination
+              totalPages={pagination.totalPages}
+              value={page}
+              onChange={setPage}
+            />
           </div>
         )}
       </div>

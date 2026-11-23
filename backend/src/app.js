@@ -1,10 +1,12 @@
 import express from 'express';
+import path from 'path';
 import helmet from 'helmet';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import compression from 'compression';
 import morgan from 'morgan';
 import env from './config/env.js';
+import { connectDB } from './config/database.js';
 import apiRouter from './routes/index.js';
 import sitemapController from './controllers/sitemapController.js';
 import notFoundHandler from './middlewares/notFoundHandler.js';
@@ -36,7 +38,14 @@ const allowedOrigins = env.CORS_ORIGIN.split(',').map((origin) => origin.trim())
 app.use(cors({
   origin: (origin, callback) => {
     // Allow non-browser requests (e.g. server-to-server or curl) or matching origins
-    if (!origin || allowedOrigins.includes(origin) || env.NODE_ENV === 'development') {
+    if (
+      !origin ||
+      env.NODE_ENV === 'development' ||
+      allowedOrigins.includes(origin) ||
+      allowedOrigins.includes('*') ||
+      /\.netlify\.app$/.test(origin) ||
+      /\.vercel\.app$/.test(origin)
+    ) {
       callback(null, true);
     } else {
       callback(new Error(`CORS blocked for origin: ${origin}`));
@@ -57,6 +66,17 @@ app.use(cors({
     'Accept'
   ]
 }));
+
+// Auto-connect MongoDB for serverless environments (Vercel)
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (err) {
+    // Let operational routes or error handler manage connection errors
+    next();
+  }
+});
 
 // Request correlation ID middleware
 app.use((req, res, next) => {
@@ -88,6 +108,9 @@ app.use(compression());
 if (env.NODE_ENV !== 'test') {
   app.use(morgan(':method :url :status :res[content-length] - :response-time ms'));
 }
+
+// Static file serving for local uploads fallback
+app.use('/uploads', express.static(path.join(process.cwd(), 'public/uploads')));
 
 // Public crawler SEO endpoints
 app.get('/sitemap.xml', sitemapController.getSitemapXml);

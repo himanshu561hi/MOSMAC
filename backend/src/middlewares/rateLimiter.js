@@ -43,10 +43,10 @@ export const authLimiter = createLimiter({
   message: 'Too many authentication attempts. Please wait 15 minutes before trying again.'
 });
 
-// Checkout and payment limiter: 10 requests per 15 minutes
+// Checkout and payment limiter: 10 requests per 15 minutes in production (generous in development)
 export const checkoutLimiter = createLimiter({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  max: process.env.NODE_ENV === 'production' ? 10 : 200,
   message: 'Too many checkout attempts. Please wait a few minutes before trying again.'
 });
 

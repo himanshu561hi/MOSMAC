@@ -18,7 +18,12 @@ import orderRoutes from './orderRoutes.js';
 import paymentRoutes from './paymentRoutes.js';
 import adminOrderRoutes from './adminOrderRoutes.js';
 import cmsRoutes, { adminCmsRouter } from './cmsRoutes.js';
+import { offersDealsRoutes } from './offersDealsRoutes.js';
 import { adminReviewRouter } from './reviewRoutes.js';
+import homepageSectionRoutes, { adminHomepageRouter } from './homepageSectionRoutes.js';
+import { homepageSectionController } from '../controllers/homepageSectionController.js';
+import { authenticate, authorize } from '../middlewares/auth.js';
+import { ROLES } from '../constants/roles.js';
 
 export const apiRouter = Router();
 
@@ -27,6 +32,7 @@ apiRouter.use('/health', healthRoutes);
 
 // Mount Storefront Public Experience Routes
 apiRouter.use('/storefront', storefrontRoutes);
+apiRouter.use('/homepage', homepageSectionRoutes);
 
 // Mount Authentication & Customer Identity Routes
 apiRouter.use('/auth', authRoutes);
@@ -62,11 +68,17 @@ apiRouter.use('/media', mediaRoutes);
 
 // Mount CMS & Storefront Content Routes
 apiRouter.use('/content', cmsRoutes);
+apiRouter.use('/cms', cmsRoutes);
+
+// Mount Offers & Deals Feature Routes
+apiRouter.use('/offers-deals', offersDealsRoutes);
+apiRouter.use('/admin/offers-deals', offersDealsRoutes);
 
 // Mount Administrative Management Routes
 apiRouter.use('/admin/orders', adminOrderRoutes);
 apiRouter.use('/admin/cms', adminCmsRouter);
 apiRouter.use('/admin/reviews', adminReviewRouter);
+apiRouter.use('/admin/homepage-sections', adminHomepageRouter);
 apiRouter.use('/admin', adminRoutes);
 
 // Stub for remaining Phase 2-8 routes

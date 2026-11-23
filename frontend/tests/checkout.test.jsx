@@ -288,6 +288,59 @@ describe('Phase 6 — Checkout, Payments & Order Lifecycle Frontend Tests', () =
 
       expect(screen.getByRole('button', { name: /Confirm Order \(COD\)/i })).toBeInTheDocument();
     });
+
+    it('displays error in a single alert and dispatches toast when order fails', async () => {
+      const { checkoutService } = await import('@/services/checkoutService');
+      checkoutService.createOrder.mockRejectedValueOnce({
+        message: 'Too many checkout attempts. Please wait a few minutes before trying again.'
+      });
+
+      const mockItems = [
+        {
+          sku: 'LAMP-WHITE',
+          quantity: 1,
+          unitPrice: 199900,
+          lineTotal: 199900,
+          product: { title: 'Minimalist Desk Lamp' }
+        }
+      ];
+
+      const { store } = renderWithProviders(<CheckoutPage />, {
+        preloadedState: {
+          auth: { isAuthenticated: true, user: { _id: 'u-1' } },
+          cart: { items: mockItems, itemCount: 1, subtotal: 199900, grandTotal: 199900 },
+          checkout: {
+            selectedShippingAddress: { fullName: 'Rahul Sharma', postalCode: '400053', phone: '9876543210' },
+            paymentMethod: 'cod',
+            codEligibility: { eligible: true, minAmount: 20000, maxAmount: 1000000 }
+          }
+        }
+      });
+
+      const confirmBtn = screen.getByRole('button', { name: /Confirm Order \(COD\)/i });
+      await waitFor(() => {
+        expect(confirmBtn).not.toBeDisabled();
+      });
+      fireEvent.click(confirmBtn);
+
+      await waitFor(() => {
+        // Assert exactly ONE error message appears in the alert (not duplicated stacked alerts)
+        const errorElements = screen.getAllByText(/Too many checkout attempts/i);
+        expect(errorElements).toHaveLength(1);
+      });
+
+      // Assert toast was also dispatched to the uiSlice
+      const toasts = store.getState().ui.toasts;
+      expect(toasts.length).toBeGreaterThanOrEqual(1);
+      expect(toasts.some((t) => t.message.includes('Too many checkout attempts'))).toBe(true);
+
+      // Dismiss the alert
+      const dismissBtn = screen.getByTitle('Dismiss');
+      fireEvent.click(dismissBtn);
+
+      // Alert should be gone
+      expect(screen.queryByText(/Too many checkout attempts/i)).not.toBeInTheDocument();
+    });
   });
 
   describe('3. OrderConfirmationPage Component', () => {

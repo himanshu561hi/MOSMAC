@@ -9,6 +9,7 @@ import {
   ShoppingBag,
   Users,
   Tag,
+  Percent,
   BarChart3,
   Settings,
   ShieldAlert,
@@ -24,7 +25,8 @@ import {
   UserCheck,
   LayoutTemplate,
   Star,
-  FolderOpen
+  FolderOpen,
+  Image as ImageIcon
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useSelector, useDispatch } from 'react-redux';
@@ -50,18 +52,26 @@ export function AdminLayout() {
     { name: 'Orders & Fulfilment', href: '/admin/orders', icon: ShoppingBag },
     { name: 'Customers & CRM', href: '/admin/customers', icon: Users },
     { name: 'Coupons & Promos', href: '/admin/coupons', icon: Tag },
+    { name: 'Offers & Deals', href: '/admin/offers-deals', icon: Percent },
     { name: 'Payments & Refunds', href: '/admin/payments', icon: CreditCard },
     { name: 'Analytics & Reports', href: '/admin/analytics', icon: BarChart3 },
+    {
+      name: 'Homepage Management',
+      href: '/admin/homepage-sections',
+      icon: Layers,
+      subItems: [
+        { name: 'Section Products', href: '/admin/homepage-sections' },
+        { name: 'Section Settings', href: '/admin/homepage-sections/settings' }
+      ]
+    },
     { name: 'CMS & Content', href: '/admin/cms', icon: LayoutTemplate },
     { name: 'Customer Reviews', href: '/admin/reviews', icon: Star },
-    { name: 'Media Library', href: '/admin/media', icon: FolderOpen },
     ...(isSuperAdmin
       ? [
-          { name: 'Staff & Roles', href: '/admin/staff', icon: UserCheck },
-          { name: 'Audit Logs', href: '/admin/audit-logs', icon: ShieldAlert }
-        ]
-      : []),
-    { name: 'Store Settings', href: '/admin/settings', icon: Settings }
+        { name: 'Staff & Roles', href: '/admin/staff', icon: UserCheck },
+        { name: 'Audit Logs', href: '/admin/audit-logs', icon: ShieldAlert }
+      ]
+      : [])
   ];
 
   // Role-based navigation filtering
@@ -125,25 +135,58 @@ export function AdminLayout() {
         {/* Navigation Links */}
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           {navigation.map((item) => {
-            const isActive =
-              item.href === '/admin'
-                ? location.pathname === '/admin'
-                : location.pathname.startsWith(item.href);
+            const isActive = (() => {
+              if (item.href === '/admin') {
+                return location.pathname === '/admin';
+              }
+              if (item.href === '/admin/cms') {
+                return (
+                  location.pathname.startsWith('/admin/cms') ||
+                  location.pathname.startsWith('/admin/banners') ||
+                  location.pathname.startsWith('/admin/media') ||
+                  location.pathname.startsWith('/admin/settings')
+                );
+              }
+              return location.pathname.startsWith(item.href);
+            })();
             return (
-              <Link
-                key={item.name}
-                to={item.href}
-                onClick={() => setSidebarOpen(false)}
-                className={clsx(
-                  'flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
-                  isActive
-                    ? 'bg-emerald-600 text-white font-semibold'
-                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              <div key={item.name} className="space-y-0.5">
+                <Link
+                  to={item.href}
+                  onClick={() => setSidebarOpen(false)}
+                  className={clsx(
+                    'flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
+                    isActive
+                      ? 'bg-emerald-600 text-white font-semibold'
+                      : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                  )}
+                >
+                  <item.icon className="w-4 h-4 shrink-0" />
+                  <span>{item.name}</span>
+                </Link>
+                {item.subItems && isActive && (
+                  <div className="pl-9 pr-2 py-1 space-y-1">
+                    {item.subItems.map((sub) => {
+                      const isSubActive = location.pathname === sub.href;
+                      return (
+                        <Link
+                          key={sub.name}
+                          to={sub.href}
+                          onClick={() => setSidebarOpen(false)}
+                          className={clsx(
+                            'block py-1 px-2.5 rounded-md text-xs transition-colors',
+                            isSubActive
+                              ? 'bg-emerald-700/50 text-white font-bold'
+                              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                          )}
+                        >
+                          {sub.name}
+                        </Link>
+                      );
+                    })}
+                  </div>
                 )}
-              >
-                <item.icon className="w-4 h-4 shrink-0" />
-                <span>{item.name}</span>
-              </Link>
+              </div>
             );
           })}
         </nav>

@@ -1,26 +1,130 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
-import { ShoppingBag, Heart, User, Menu, X, ShieldCheck, ChevronDown, LogOut } from 'lucide-react';
+import {
+  ShoppingBag,
+  Heart,
+  User,
+  Menu,
+  X,
+  ShieldCheck,
+  ChevronDown,
+  LogOut,
+  MapPin
+} from 'lucide-react';
 import { useSelector, useDispatch } from 'react-redux';
-import { toggleMobileMenu, setMobileMenuOpen } from '@/store/slices/uiSlice';
+import { toggleMobileMenu, setMobileMenuOpen, setPincodeModalOpen } from '@/store/slices/uiSlice';
 import { logout } from '@/store/slices/authSlice';
 import { fetchCart } from '@/store/slices/cartSlice';
 import { fetchWishlist } from '@/store/slices/wishlistSlice';
 import { storefrontService } from '@/services/storefrontService';
 import SearchBar from '@/components/layout/SearchBar';
+import MegaMenu from '@/components/layout/MegaMenu';
+import BrandsMegaMenu from '@/components/layout/BrandsMegaMenu';
+import DeliveryPincodeModal from '@/components/layout/DeliveryPincodeModal';
+import AuthModal from '@/components/auth/AuthModal';
 import ErrorBoundary from '@/components/common/ErrorBoundary';
+import TrustPillarsBanner from '@/components/common/TrustPillarsBanner';
+
+const DEFAULT_NAV_CATEGORIES = [
+  {
+    _id: '6b012f6a83b32798a375b896',
+    name: 'Makeup',
+    slug: 'makeup',
+    isActive: true,
+    children: [
+      {
+        _id: '6b012f8b83b32798a375b8a4',
+        name: 'Face',
+        slug: 'face-makeup',
+        children: [
+          { _id: 'foundation', name: 'Foundation & BB Cream', slug: 'foundation-bb-cream' },
+          { _id: 'primer', name: 'Primer & Makeup Fixer', slug: 'primer-makeup-fixer' },
+          { _id: 'concealer', name: 'Concealer & Contour', slug: 'concealer-contour' },
+          { _id: 'powder', name: 'Face Powder', slug: 'face-powder' },
+          { _id: 'blush', name: 'Blush & Highlighter', slug: 'blush-highlighter' }
+        ]
+      },
+      {
+        _id: '6b012f8b83b32798a375b8a6',
+        name: 'Eyes',
+        slug: 'eye-makeup',
+        children: [
+          { _id: 'eyeshadow', name: 'Eyeshadow Palettes', slug: 'eyeshadow-palettes' },
+          { _id: 'eyeliner', name: 'Eyeliner & Kajal', slug: 'eyeliner-kajal' },
+          { _id: 'mascara', name: 'Mascara', slug: 'mascara' },
+          { _id: 'lashes', name: 'False Eyelashes & Lash Glue', slug: 'eyelashes-lash-glue' }
+        ]
+      },
+      {
+        _id: '6b012f8b83b32798a375b8a8',
+        name: 'Lips',
+        slug: 'lip-makeup',
+        children: [
+          { _id: 'lipstick', name: 'Lipstick & Lip Crayon', slug: 'lipstick-lip-crayon' },
+          { _id: 'liquid-lip', name: 'Liquid Lipstick', slug: 'liquid-lipstick' },
+          { _id: 'lip-balm', name: 'Lip Balm', slug: 'lip-balm' }
+        ]
+      },
+      {
+        _id: '6b012f8b83b32798a375b8aa',
+        name: 'Tools & Brushes',
+        slug: 'makeup-tools-accessories',
+        children: [
+          { _id: 'brushes', name: 'Makeup Brushes', slug: 'makeup-brushes' },
+          { _id: 'sponges', name: 'Sponges & Puffs', slug: 'sponges-puffs' },
+          { _id: 'curlers', name: 'Eyelash Curlers', slug: 'eyelash-curlers' }
+        ]
+      },
+      {
+        _id: '6b012f8c83b32798a375b8ac',
+        name: 'Kits & Sets',
+        slug: 'makeup-kits-sets',
+        children: [
+          { _id: 'kits', name: 'Makeup Kits', slug: 'makeup-kits' }
+        ]
+      }
+    ]
+  }
+];
 
 export function StorefrontLayout() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const location = useLocation();
   const { user, isAuthenticated } = useSelector((state) => state.auth);
-  const { mobileMenuOpen } = useSelector((state) => state.ui);
+  const { mobileMenuOpen, deliveryPincode } = useSelector((state) => state.ui);
   const cartCount = useSelector((state) => state.cart?.itemCount || 0);
   const wishlistCount = useSelector((state) => state.wishlist?.itemCount || 0);
 
-  const [categories, setCategories] = useState([]);
+  const [categories, setCategories] = useState(() => {
+    try {
+      const cached = sessionStorage.getItem('mosmac_nav_cats');
+      if (cached) return JSON.parse(cached);
+    } catch (e) { }
+    return DEFAULT_NAV_CATEGORIES;
+  });
+  const [brands, setBrands] = useState([]);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [hoveredCategory, setHoveredCategory] = useState(null);
+  const [brandsMenuOpen, setBrandsMenuOpen] = useState(false);
+  const [mobileBrandsOpen, setMobileBrandsOpen] = useState(false);
+  const [expandedMobileCats, setExpandedMobileCats] = useState({});
+  const closeTimeoutRef = useRef(null);
+  const brandsTimeoutRef = useRef(null);
+  const accountMenuRef = useRef(null);
+
+  // Close account menu on click outside
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (accountMenuRef.current && !accountMenuRef.current.contains(e.target)) {
+        setAccountMenuOpen(false);
+      }
+    }
+    if (accountMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [accountMenuOpen]);
 
   // Initial cart & wishlist load
   useEffect(() => {
@@ -28,37 +132,124 @@ export function StorefrontLayout() {
     dispatch(fetchWishlist());
   }, [dispatch]);
 
-  // Close mobile drawer and account menu on route change
+  const handleMouseEnter = (cat) => {
+    if (closeTimeoutRef.current) {
+      clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = null;
+    }
+    handleCloseBrandsMenu();
+    setHoveredCategory(cat);
+  };
+
+  const handleMouseLeave = () => {
+    if (closeTimeoutRef.current) {
+      clearTimeout(closeTimeoutRef.current);
+    }
+    closeTimeoutRef.current = setTimeout(() => {
+      setHoveredCategory(null);
+    }, 150);
+  };
+
+  const handleCloseMenu = () => {
+    if (closeTimeoutRef.current) {
+      clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = null;
+    }
+    setHoveredCategory(null);
+  };
+
+  const handleBrandsMouseEnter = () => {
+    if (brandsTimeoutRef.current) {
+      clearTimeout(brandsTimeoutRef.current);
+      brandsTimeoutRef.current = null;
+    }
+    handleCloseMenu();
+    setBrandsMenuOpen(true);
+  };
+
+  const handleBrandsMouseLeave = () => {
+    if (brandsTimeoutRef.current) {
+      clearTimeout(brandsTimeoutRef.current);
+    }
+    brandsTimeoutRef.current = setTimeout(() => {
+      setBrandsMenuOpen(false);
+    }, 140);
+  };
+
+  const handleCloseBrandsMenu = () => {
+    if (brandsTimeoutRef.current) {
+      clearTimeout(brandsTimeoutRef.current);
+      brandsTimeoutRef.current = null;
+    }
+    setBrandsMenuOpen(false);
+  };
+
+  // Close mobile drawer, mega menu, brands menu, and account menu on route change
   useEffect(() => {
     dispatch(setMobileMenuOpen(false));
     setAccountMenuOpen(false);
+    handleCloseMenu();
+    handleCloseBrandsMenu();
   }, [location.pathname, dispatch]);
 
-  // Load root active categories for the top navigation bar
+  // Load root active categories & active brands
   useEffect(() => {
-    async function loadNavCategories() {
+    async function loadNavData() {
       try {
-        const cats = await storefrontService.getCategories(true);
-        setCategories(cats.slice(0, 7));
+        const [cats, brs] = await Promise.all([
+          storefrontService.getCategories(true),
+          storefrontService.getBrands().catch(() => [])
+        ]);
+        if (Array.isArray(cats) && cats.length > 0) {
+          setCategories(cats.slice(0, 10));
+          try {
+            sessionStorage.setItem('mosmac_nav_cats', JSON.stringify(cats.slice(0, 10)));
+          } catch (e) { }
+        }
+        setBrands(brs || []);
       } catch (err) {
-        console.error('Failed to load navigation categories:', err);
+        console.error('Failed to load navigation data:', err);
       }
     }
-    loadNavCategories();
+    loadNavData();
   }, []);
+
+  const toggleMobileCat = (catId) => {
+    setExpandedMobileCats((prev) => ({
+      ...prev,
+      [catId]: !prev[catId]
+    }));
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50/50">
-      {/* Top Banner */}
-      <div className="bg-emerald-950 text-emerald-100 text-xs py-1.5 px-4 text-center font-medium tracking-wide">
-        Pan-India Express Delivery | Free Shipping on orders above ₹999 | 100% Genuine Certified Brands
+      {/* Top Utility Bar */}
+      <div className="bg-[#FAF9F8] border-b border-gray-100 text-[11px] text-gray-500 font-medium">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-7 flex items-center justify-between">
+          <div className="hidden sm:flex items-center gap-2 text-gray-500">
+            <span>Pan-India Express Delivery | Free Shipping on orders above ₹999 | 100% Genuine Certified Brands</span>
+          </div>
+          <div className="ml-auto flex items-center gap-3 sm:gap-4">
+            {isAuthenticated && user?.role !== 'customer' && (
+              <>
+                <Link to="/admin" className="text-amber-800 hover:text-amber-900 font-semibold flex items-center gap-1">
+                  <ShieldCheck className="w-3 h-3 text-amber-600" /> Ops Portal
+                </Link>
+                <span className="text-gray-300">|</span>
+              </>
+            )}
+            <Link to="/track-order" className="hover:text-gray-900 transition-colors">Track Order</Link>
+            <span className="text-gray-300">|</span>
+            <Link to="/faqs" className="hover:text-gray-900 transition-colors">Help Centre</Link>
+          </div>
+        </div>
       </div>
 
-      {/* Main Header */}
-      <header className="sticky top-0 z-40 bg-white border-b border-gray-200/80 shadow-2xs backdrop-blur-md bg-white/95">
+      {/* Main Header (Row 1) */}
+      <header className="sticky top-0 z-40 bg-white border-b border-gray-100 shadow-2xs backdrop-blur-md bg-white/95">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
-          {/* Logo & Mobile Menu Toggle */}
-          <div className="flex items-center gap-3">
+          {/* Left: Mobile Toggle + Logo + Welcome/Login */}
+          <div className="flex items-center gap-3 sm:gap-4">
             <button
               type="button"
               onClick={() => dispatch(toggleMobileMenu())}
@@ -67,81 +258,104 @@ export function StorefrontLayout() {
             >
               {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
-            <Link to="/" className="flex items-center gap-1.5">
-              <span className="font-extrabold text-2xl tracking-tight text-gray-900 font-sans">
-                AURORA<span className="text-emerald-600">.</span>
+
+            {/* Logo */}
+            <Link to="/" onMouseEnter={handleCloseBrandsMenu} className="flex items-center">
+              <span className="font-black text-2xl sm:text-[26px] tracking-tight text-slate-950 uppercase font-sans select-none flex items-center">
+                MOSMAC<span className="w-1.5 h-1.5 rounded-full bg-[#E03A30] ml-0.5 inline-block" />
               </span>
             </Link>
-          </div>
 
-          {/* Interactive Search Bar with Live Suggestions */}
-          <div className="hidden md:flex flex-1 max-w-lg mx-4">
-            <SearchBar className="w-full" />
-          </div>
+            {/* Welcome */}
+            <div className="hidden lg:flex items-center pl-3.5 select-none border-l border-slate-200 ml-1 h-6">
+              <span className="text-xs sm:text-[13px] font-semibold text-slate-700">
+                {isAuthenticated && user?.firstName ? `Hi, ${user.firstName}` : 'Welcome'}
+              </span>
+            </div>
 
-          {/* Right Action Icons & Account Entry */}
-          <div className="flex items-center gap-2 sm:gap-4">
-            {isAuthenticated && user?.role !== 'customer' && (
-              <Link
-                to="/admin"
-                className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors"
+            {/* Middle Nav Links */}
+            <nav className="hidden xl:flex items-center gap-5 text-xs font-semibold text-slate-700 ml-4 h-full">
+              <div
+                className="relative h-16 flex items-center"
+                onMouseEnter={handleBrandsMouseEnter}
+                onMouseLeave={handleBrandsMouseLeave}
               >
-                <ShieldCheck className="w-3.5 h-3.5" />
-                Admin Panel
-              </Link>
-            )}
+                <button
+                  type="button"
+                  onClick={() => setBrandsMenuOpen(!brandsMenuOpen)}
+                  className={`text-xs font-bold transition-colors flex items-center py-2 ${brandsMenuOpen ? 'text-[#E03A30]' : 'text-slate-800 hover:text-[#E03A30]'
+                    }`}
+                >
+                  Brands
+                </button>
+                {/* Active indicator underline */}
+                {brandsMenuOpen && (
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#E03A30] rounded-full" />
+                )}
+              </div>
+              <Link to="/products?section=trending" onMouseEnter={handleCloseBrandsMenu} className="hover:text-[#E03A30] transition-colors">Trending Now</Link>
+              <Link to="/products?section=bestsellers" onMouseEnter={handleCloseBrandsMenu} className="hover:text-[#E03A30] transition-colors">Bestsellers</Link>
+              <Link to="/offers" onMouseEnter={handleCloseBrandsMenu} className="hover:text-[#E03A30] transition-colors">Offers & Deals</Link>
+              <Link to="/mosmac-select" onMouseEnter={handleCloseBrandsMenu} className="hover:text-[#E03A30] transition-colors">MOSMAC Select</Link>
+            </nav>
+          </div>
 
-            {/* Wishlist Link */}
-            <Link
-              to="/wishlist"
-              className="p-2 text-gray-600 hover:text-emerald-600 relative transition-colors rounded-full hover:bg-gray-50"
-              aria-label="Wishlist"
-              title="Saved Items"
+          {/* Right: Search + Delivering to + Bag + Account */}
+          <div className="flex items-center gap-3 sm:gap-4 ml-auto">
+            {/* Interactive Search Bar */}
+            <div className="w-44 sm:w-56 lg:w-64">
+              <SearchBar className="w-full" placeholder="Search" />
+            </div>
+
+            {/* Delivering to Selector */}
+            <button
+              type="button"
+              onClick={() => dispatch(setPincodeModalOpen(true))}
+              className="hidden md:flex flex-col text-left cursor-pointer group select-none"
+              title="Change delivery PIN Code"
             >
-              <Heart className="w-5 h-5" />
-              {wishlistCount > 0 && (
-                <span className="absolute top-1 right-1 min-w-4 h-4 px-1 bg-rose-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                  {wishlistCount > 99 ? '99+' : wishlistCount}
-                </span>
-              )}
-            </Link>
+              <span className="text-[10px] text-gray-400 font-normal leading-tight">Delivering to</span>
+              <span className="text-xs font-bold text-gray-900 flex items-center gap-1 leading-tight group-hover:text-[#E04038]">
+                {deliveryPincode || '400013'} <ChevronDown className="w-3 h-3 text-gray-400 group-hover:text-[#E04038]" />
+              </span>
+            </button>
 
-            {/* Cart Link with Badge */}
+            {/* Shopping Bag */}
             <Link
               to="/cart"
-              className="p-2 text-gray-600 hover:text-emerald-600 relative transition-colors rounded-full hover:bg-gray-50"
+              className="p-1.5 text-gray-800 hover:text-[#E04038] relative transition-colors"
               aria-label="Cart"
               title="Shopping Bag"
             >
-              <ShoppingBag className="w-5 h-5" />
+              <ShoppingBag className="w-5 h-5 stroke-[1.5]" />
               {cartCount > 0 && (
-                <span className="absolute top-1 right-1 min-w-4 h-4 px-1 bg-emerald-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 bg-[#E04038] text-white text-[10px] font-bold rounded-full flex items-center justify-center">
                   {cartCount > 99 ? '99+' : cartCount}
                 </span>
               )}
             </Link>
 
-            {/* Account Entry / Dropdown */}
-            <div className="relative">
-              {isAuthenticated ? (
-                <div className="flex items-center">
-                  <button
-                    type="button"
-                    onClick={() => setAccountMenuOpen(!accountMenuOpen)}
-                    className="flex items-center gap-1.5 p-1.5 sm:px-3 text-xs font-semibold text-gray-800 hover:text-emerald-600 rounded-xl hover:bg-gray-50 transition-colors"
-                  >
-                    <div className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-xs">
-                      {user?.firstName?.[0]?.toUpperCase() || 'U'}
-                    </div>
-                    <span className="hidden sm:inline">{user?.firstName || 'Account'}</span>
-                    <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
-                  </button>
+            {/* Profile / Account Icon */}
+            <div className="relative" ref={accountMenuRef}>
+              <button
+                type="button"
+                onClick={() => setAccountMenuOpen(!accountMenuOpen)}
+                className="p-1.5 text-gray-800 hover:text-[#E04038] relative transition-colors"
+                aria-label="Account"
+                title={isAuthenticated ? `${user?.firstName} (${user?.role})` : 'Account'}
+              >
+                <User className="w-5 h-5 stroke-[1.5]" />
+              </button>
 
-                  {/* Dropdown Menu */}
-                  {accountMenuOpen && (
-                    <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-2xl shadow-xl border border-gray-100 p-1.5 space-y-1 z-50 text-xs animate-in fade-in duration-100">
+              {/* Account Dropdown Menu */}
+              {accountMenuOpen && (
+                <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-2xl shadow-xl border border-gray-100 p-1.5 space-y-1 z-50 text-xs animate-in fade-in duration-100">
+                  {isAuthenticated ? (
+                    <>
                       <div className="px-3 py-2 border-b border-gray-100">
-                        <p className="font-bold text-gray-900 truncate">{user?.firstName} {user?.lastName}</p>
+                        <p className="font-bold text-gray-900 truncate">
+                          {user?.firstName} {user?.lastName}
+                        </p>
                         <p className="text-[11px] text-gray-400 truncate">{user?.email}</p>
                       </div>
 
@@ -151,6 +365,22 @@ export function StorefrontLayout() {
                         className="block px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-50 font-medium"
                       >
                         My Account
+                      </Link>
+
+                      <Link
+                        to="/orders"
+                        onClick={() => setAccountMenuOpen(false)}
+                        className="block px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-50 font-medium"
+                      >
+                        My Orders
+                      </Link>
+
+                      <Link
+                        to="/wishlist"
+                        onClick={() => setAccountMenuOpen(false)}
+                        className="block px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-50 font-medium"
+                      >
+                        My Wishlist ({wishlistCount})
                       </Link>
 
                       {user?.role !== 'customer' && (
@@ -174,209 +404,435 @@ export function StorefrontLayout() {
                       >
                         <LogOut className="w-3.5 h-3.5" /> Sign Out
                       </button>
+                    </>
+                  ) : (
+                    <div className="p-3 space-y-2">
+                      <p className="font-bold text-gray-900 text-sm">Welcome to Mosmac</p>
+                      <p className="text-[11px] text-gray-500">Sign in to access your orders, wishlist, and recommendations.</p>
+                      <Link
+                        to="/login"
+                        onClick={() => setAccountMenuOpen(false)}
+                        className="block w-full py-2 text-center bg-[#E04038] text-white font-semibold rounded-lg hover:bg-[#c9342d] transition-colors"
+                      >
+                        Sign In / Register
+                      </Link>
                     </div>
                   )}
                 </div>
-              ) : (
-                <Link
-                  to="/login"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-gray-800 hover:bg-gray-100 transition-colors"
-                >
-                  <User className="w-4 h-4" />
-                  <span>Sign In</span>
-                </Link>
               )}
             </div>
           </div>
         </div>
 
-        {/* Secondary Category Navigation Bar */}
-        <div className="hidden md:block border-t border-gray-100 bg-white">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-10 flex items-center gap-6 text-xs font-semibold text-gray-700 overflow-x-auto">
+        {/* Brands MegaMenu Dropdown (opens directly beneath Level 1, covering Level 2 while open) */}
+        <BrandsMegaMenu
+          isOpen={brandsMenuOpen}
+          brands={brands}
+          onClose={handleCloseBrandsMenu}
+          onMouseEnter={() => {
+            if (brandsTimeoutRef.current) {
+              clearTimeout(brandsTimeoutRef.current);
+              brandsTimeoutRef.current = null;
+            }
+          }}
+          onMouseLeave={handleBrandsMouseLeave}
+        />
+
+        {/* Level 2: Category Navigation Bar with MegaMenu on Hover */}
+        <div
+          className="relative hidden md:block border-t border-gray-100 bg-white"
+          onMouseLeave={handleMouseLeave}
+        >
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-11 flex items-center gap-1 text-[13px] font-normal text-gray-800 overflow-x-auto no-scrollbar">
             <Link
-              to="/products"
-              className="text-emerald-700 hover:text-emerald-900 whitespace-nowrap font-bold"
+              to="/whats-new"
+              onMouseEnter={handleCloseMenu}
+              className="px-3.5 py-2.5 text-gray-900 hover:text-black transition-colors whitespace-nowrap font-medium"
             >
-              All Products
+              What's New
             </Link>
-            {categories.map((cat) => (
-              <Link
-                key={cat._id}
-                to={`/products?category=${cat.slug}`}
-                className="hover:text-emerald-600 transition-colors whitespace-nowrap"
-              >
-                {cat.name}
-              </Link>
-            ))}
-            <Link
-              to="/products?featured=true"
-              className="text-amber-600 hover:text-amber-700 whitespace-nowrap"
-            >
-              Featured Deals
-            </Link>
+
+            {categories.map((cat) => {
+              const hasSubcategories = Array.isArray(cat.children) && cat.children.length > 0;
+              const isHovered = hoveredCategory?._id === cat._id;
+
+              return (
+                <div
+                  key={cat._id}
+                  className="relative h-full flex items-center"
+                  onMouseEnter={() => {
+                    if (brandsMenuOpen) return;
+                    if (hasSubcategories) {
+                      handleMouseEnter(cat);
+                    } else {
+                      handleCloseMenu();
+                    }
+                  }}
+                >
+                  <Link
+                    to={cat.slug ? `/category/${cat.slug}` : `/products`}
+                    onClick={handleCloseMenu}
+                    className={`px-3.5 py-2.5 transition-colors whitespace-nowrap flex items-center gap-1 ${isHovered
+                      ? 'text-black font-semibold'
+                      : 'text-gray-800 hover:text-black'
+                      }`}
+                  >
+                    <span>{cat.name}</span>
+                    {hasSubcategories && (
+                      <ChevronDown
+                        className={`w-3 h-3 text-gray-400 transition-transform duration-150 ${isHovered ? 'rotate-180 text-black' : ''
+                          }`}
+                      />
+                    )}
+                  </Link>
+
+                  {/* Active Indicator Bar on Hover (only when subcategories mega menu is open) */}
+                  {isHovered && hasSubcategories && (
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#E04038] rounded-full" />
+                  )}
+                </div>
+              );
+            })}
           </div>
+
+          {/* MegaMenu Dropdown */}
+          <MegaMenu
+            category={hoveredCategory}
+            isOpen={Boolean(hoveredCategory)}
+            onClose={handleCloseMenu}
+            onMouseEnter={() => {
+              if (closeTimeoutRef.current) {
+                clearTimeout(closeTimeoutRef.current);
+                closeTimeoutRef.current = null;
+              }
+            }}
+            onMouseLeave={handleMouseLeave}
+          />
         </div>
 
-        {/* Mobile Navigation Drawer */}
+        {/* Mobile Navigation Drawer with Click-Outside Backdrop */}
         {mobileMenuOpen && (
-          <div className="md:hidden border-t border-gray-200 bg-white px-4 py-4 space-y-4">
-            <SearchBar
-              onSearchSubmitted={() => dispatch(setMobileMenuOpen(false))}
-              className="w-full"
+          <>
+            <div
+              className="fixed inset-0 top-16 bg-black/40 z-40 md:hidden animate-in fade-in duration-150"
+              onClick={() => dispatch(setMobileMenuOpen(false))}
             />
-
-            <nav className="flex flex-col space-y-1 text-sm font-medium text-gray-800">
-              <Link
-                to="/"
-                onClick={() => dispatch(setMobileMenuOpen(false))}
-                className="px-3 py-2 rounded-lg hover:bg-gray-50"
+            <div
+              className="relative z-50 md:hidden border-t border-gray-200 bg-white px-4 py-4 space-y-4 max-h-[80vh] overflow-y-auto shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Mobile Pincode button */}
+              <button
+                type="button"
+                onClick={() => {
+                  dispatch(setMobileMenuOpen(false));
+                  dispatch(setPincodeModalOpen(true));
+                }}
+                className="w-full flex items-center justify-between p-2.5 bg-gray-50 rounded-xl text-xs font-medium text-gray-700 border border-gray-200/80"
               >
-                Home
-              </Link>
-              <Link
-                to="/products"
-                onClick={() => dispatch(setMobileMenuOpen(false))}
-                className="px-3 py-2 rounded-lg hover:bg-gray-50 font-bold text-emerald-700"
-              >
-                All Products
-              </Link>
+                <span className="flex items-center gap-2">
+                  <MapPin className="w-4 h-4 text-emerald-600" />
+                  <span>Deliver to:</span>
+                  <strong className="text-gray-900">{deliveryPincode || '110001'}</strong>
+                </span>
+                <span className="text-emerald-600 text-[11px] font-semibold">Change</span>
+              </button>
 
-              {categories.map((cat) => (
+              <SearchBar
+                onSearchSubmitted={() => dispatch(setMobileMenuOpen(false))}
+                className="w-full"
+              />
+
+              <nav className="flex flex-col space-y-1 text-sm font-medium text-gray-800">
                 <Link
-                  key={cat._id}
-                  to={`/products?category=${cat.slug}`}
+                  to="/"
                   onClick={() => dispatch(setMobileMenuOpen(false))}
-                  className="px-3 py-2 rounded-lg hover:bg-gray-50 text-gray-600"
+                  className="px-3 py-2 rounded-lg hover:bg-gray-50"
                 >
-                  {cat.name}
+                  Home
                 </Link>
-              ))}
-
-              <div className="pt-2 border-t border-gray-100 space-y-1">
                 <Link
-                  to="/cart"
+                  to="/whats-new"
                   onClick={() => dispatch(setMobileMenuOpen(false))}
-                  className="px-3 py-2 rounded-lg hover:bg-gray-50 flex items-center justify-between text-gray-800 font-medium"
+                  className="px-3 py-2 rounded-lg hover:bg-gray-50 font-semibold text-rose-600"
                 >
-                  <span className="flex items-center gap-2">
-                    <ShoppingBag className="w-4 h-4 text-emerald-600" /> Shopping Bag
-                  </span>
-                  {cartCount > 0 && (
-                    <span className="bg-emerald-100 text-emerald-800 text-xs px-2 py-0.5 rounded-full font-bold">
-                      {cartCount}
+                  What's New
+                </Link>
+                <Link
+                  to="/products?section=trending"
+                  onClick={() => dispatch(setMobileMenuOpen(false))}
+                  className="px-3 py-2 rounded-lg hover:bg-gray-50 font-medium text-slate-800"
+                >
+                  Trending Now
+                </Link>
+                <Link
+                  to="/products?section=bestsellers"
+                  onClick={() => dispatch(setMobileMenuOpen(false))}
+                  className="px-3 py-2 rounded-lg hover:bg-gray-50 font-medium text-slate-800"
+                >
+                  Bestsellers
+                </Link>
+                <Link
+                  to="/offers"
+                  onClick={() => dispatch(setMobileMenuOpen(false))}
+                  className="px-3 py-2 rounded-lg hover:bg-gray-50 font-medium text-slate-800"
+                >
+                  Offers & Deals
+                </Link>
+                <Link
+                  to="/mosmac-select"
+                  onClick={() => dispatch(setMobileMenuOpen(false))}
+                  className="px-3 py-2 rounded-lg hover:bg-gray-50 font-medium text-slate-800"
+                >
+                  MOSMAC Select
+                </Link>
+                <Link
+                  to="/products"
+                  onClick={() => dispatch(setMobileMenuOpen(false))}
+                  className="px-3 py-2 rounded-lg hover:bg-gray-50 font-bold text-[#E04038]"
+                >
+                  All Products
+                </Link>
+
+                {/* Mobile Brands Accordion */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-gray-50">
+                    <span className="text-gray-700 flex-1 font-semibold select-none">
+                      Brands
                     </span>
-                  )}
-                </Link>
-                <Link
-                  to="/wishlist"
-                  onClick={() => dispatch(setMobileMenuOpen(false))}
-                  className="px-3 py-2 rounded-lg hover:bg-gray-50 flex items-center justify-between text-gray-800 font-medium"
-                >
-                  <span className="flex items-center gap-2">
-                    <Heart className="w-4 h-4 text-rose-500" /> Wishlist
-                  </span>
-                  {wishlistCount > 0 && (
-                    <span className="bg-rose-100 text-rose-700 text-xs px-2 py-0.5 rounded-full font-bold">
-                      {wishlistCount}
-                    </span>
-                  )}
-                </Link>
-              </div>
-
-              <div className="pt-2 border-t border-gray-100 space-y-1">
-                {isAuthenticated ? (
-                  <>
-                    <Link
-                      to="/account"
-                      onClick={() => dispatch(setMobileMenuOpen(false))}
-                      className="px-3 py-2 rounded-lg hover:bg-gray-50 block"
-                    >
-                      My Account ({user?.firstName})
-                    </Link>
-                    {user?.role !== 'customer' && (
-                      <Link
-                        to="/admin"
-                        onClick={() => dispatch(setMobileMenuOpen(false))}
-                        className="px-3 py-2 rounded-lg hover:bg-amber-50 text-amber-800 block"
-                      >
-                        Operations Portal
-                      </Link>
-                    )}
                     <button
                       type="button"
-                      onClick={() => {
-                        dispatch(setMobileMenuOpen(false));
-                        dispatch(logout());
-                        navigate('/');
-                      }}
-                      className="w-full text-left px-3 py-2 rounded-lg text-red-600 hover:bg-red-50"
+                      onClick={() => setMobileBrandsOpen(!mobileBrandsOpen)}
+                      className="p-1 text-gray-400 hover:text-gray-700"
+                      aria-label="Toggle brands"
                     >
-                      Sign Out
+                      <ChevronDown
+                        className={`w-4 h-4 transition-transform ${mobileBrandsOpen ? 'rotate-180 text-[#E04038]' : ''
+                          }`}
+                      />
                     </button>
-                  </>
-                ) : (
+                  </div>
+
+                  {mobileBrandsOpen && (
+                    <div className="pl-4 pr-2 py-2 space-y-1 bg-gray-50/80 rounded-xl max-h-60 overflow-y-auto no-scrollbar text-xs">
+                      {(brands.length > 0
+                        ? brands
+                        : [
+                          { name: 'MOSMAC', slug: 'mosmac' },
+                          { name: 'IMAGIC', slug: 'imagic' },
+                          { name: 'Lakmé', slug: 'lakme' },
+                          { name: "L'Oréal", slug: 'loreal' },
+                          { name: 'Maybelline', slug: 'maybelline' },
+                          { name: 'Sugar Cosmetics', slug: 'sugar' },
+                          { name: 'MAC', slug: 'mac' }
+                        ]
+                      ).map((b) => (
+                        <Link
+                          key={b.slug}
+                          to={`/products?brand=${encodeURIComponent(b.slug)}`}
+                          onClick={() => dispatch(setMobileMenuOpen(false))}
+                          className="block py-1.5 px-2 text-gray-700 hover:text-[#E04038] hover:bg-white rounded font-medium"
+                        >
+                          {b.name}
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Mobile Category Accordions */}
+                {categories.map((cat) => {
+                  const subs = Array.isArray(cat.children) ? cat.children : [];
+                  const isExpanded = expandedMobileCats[cat._id];
+
+                  return (
+                    <div key={cat._id} className="space-y-1">
+                      <div className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-gray-50">
+                        <Link
+                          to={`/products?category=${cat.slug}`}
+                          onClick={() => dispatch(setMobileMenuOpen(false))}
+                          className="text-gray-700 flex-1 font-semibold"
+                        >
+                          {cat.name}
+                        </Link>
+                        {subs.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => toggleMobileCat(cat._id)}
+                            className="p-1 text-gray-400 hover:text-gray-700"
+                          >
+                            <ChevronDown
+                              className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180 text-emerald-600' : ''
+                                }`}
+                            />
+                          </button>
+                        )}
+                      </div>
+
+                      {isExpanded && subs.length > 0 && (
+                        <div className="pl-6 space-y-1 bg-gray-50/60 rounded-lg p-2 text-xs">
+                          {subs.map((sub) => (
+                            <Link
+                              key={sub._id}
+                              to={`/products?category=${sub.slug}`}
+                              onClick={() => dispatch(setMobileMenuOpen(false))}
+                              className="block py-1 text-gray-600 hover:text-emerald-600"
+                            >
+                              {sub.name}
+                            </Link>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                <div className="pt-2 border-t border-gray-100 space-y-1">
                   <Link
-                    to="/login"
+                    to="/cart"
                     onClick={() => dispatch(setMobileMenuOpen(false))}
-                    className="px-3 py-2 rounded-lg hover:bg-gray-50 text-emerald-700 font-bold block"
+                    className="px-3 py-2 rounded-lg hover:bg-gray-50 flex items-center justify-between text-gray-800 font-medium"
                   >
-                    Sign In / Register
+                    <span className="flex items-center gap-2">
+                      <ShoppingBag className="w-4 h-4 text-emerald-600" /> Shopping Bag
+                    </span>
+                    {cartCount > 0 && (
+                      <span className="bg-emerald-100 text-emerald-800 text-xs px-2 py-0.5 rounded-full font-bold">
+                        {cartCount}
+                      </span>
+                    )}
                   </Link>
-                )}
-              </div>
-            </nav>
-          </div>
+                  <Link
+                    to="/wishlist"
+                    onClick={() => dispatch(setMobileMenuOpen(false))}
+                    className="px-3 py-2 rounded-lg hover:bg-gray-50 flex items-center justify-between text-gray-800 font-medium"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Heart className="w-4 h-4 text-rose-500" /> Wishlist
+                    </span>
+                    {wishlistCount > 0 && (
+                      <span className="bg-rose-100 text-rose-700 text-xs px-2 py-0.5 rounded-full font-bold">
+                        {wishlistCount}
+                      </span>
+                    )}
+                  </Link>
+                </div>
+
+                <div className="pt-2 border-t border-gray-100 space-y-1">
+                  {isAuthenticated ? (
+                    <>
+                      <Link
+                        to="/account"
+                        onClick={() => dispatch(setMobileMenuOpen(false))}
+                        className="px-3 py-2 rounded-lg hover:bg-gray-50 block"
+                      >
+                        My Account ({user?.firstName})
+                      </Link>
+                      {user?.role !== 'customer' && (
+                        <Link
+                          to="/admin"
+                          onClick={() => dispatch(setMobileMenuOpen(false))}
+                          className="px-3 py-2 rounded-lg hover:bg-amber-50 text-amber-800 block"
+                        >
+                          Operations Portal
+                        </Link>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          dispatch(setMobileMenuOpen(false));
+                          dispatch(logout());
+                          navigate('/');
+                        }}
+                        className="w-full text-left px-3 py-2 rounded-lg text-red-600 hover:bg-red-50 flex items-center gap-1.5"
+                      >
+                        <LogOut className="w-3.5 h-3.5" /> Sign Out
+                      </button>
+                    </>
+                  ) : (
+                    <Link
+                      to="/login"
+                      onClick={() => dispatch(setMobileMenuOpen(false))}
+                      className="px-3 py-2 rounded-lg bg-emerald-600 text-white font-semibold text-center block"
+                    >
+                      Sign In / Register
+                    </Link>
+                  )}
+                </div>
+              </nav>
+            </div>
+          </>
         )}
       </header>
 
-      {/* Main Content Area */}
+      {/* Main Page Content */}
       <main className="flex-1">
-        <ErrorBoundary variant="global">
+        <ErrorBoundary>
           <Outlet />
         </ErrorBoundary>
       </main>
 
-      {/* Footer */}
-      <footer className="bg-slate-950 text-gray-400 text-xs border-t border-slate-900 mt-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 grid grid-cols-1 md:grid-cols-4 gap-10">
-          <div className="space-y-3">
-            <span className="font-extrabold text-2xl text-white tracking-tight">
-              AURORA<span className="text-emerald-500">.</span>
+      {/* Trust & Assurance Banner (Displayed at bottom above footer across storefront) */}
+      <TrustPillarsBanner className="my-12 sm:my-16" />
+
+      {/* Delivery PIN Code Modal */}
+      <DeliveryPincodeModal />
+
+      {/* Storefront Footer */}
+      <footer className="bg-slate-950 text-gray-300 pt-16 pb-8 border-t border-slate-900 mt-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-4 gap-8 mb-12">
+          <div className="space-y-4">
+            <span className="font-extrabold text-2xl tracking-tight text-white font-sans tracking-wide">
+              MOSMAC<span className="text-emerald-500">.</span>
             </span>
-            <p className="text-gray-400 text-xs leading-relaxed">
-              Curated single-vendor multi-category e-commerce platform delivering certified genuine products across 25,000+ Indian PIN codes.
+            <p className="text-xs text-gray-400 leading-relaxed">
+              Curated luxury beauty and cosmetics destination delivering 100% genuine, dermatologically tested products with nationwide express logistics across India.
             </p>
-            <div className="text-[11px] text-gray-500 pt-1">
-              Currency: <strong>INR (₹)</strong> | All prices statutory GST inclusive
-            </div>
           </div>
 
           <div>
-            <h4 className="text-xs font-bold uppercase tracking-wider text-white mb-3">Categories</h4>
-            <ul className="space-y-2">
-              {categories.slice(0, 5).map((cat) => (
-                <li key={cat._id}>
-                  <Link to={`/products?category=${cat.slug}`} className="hover:text-emerald-400 transition-colors">
-                    {cat.name}
-                  </Link>
-                </li>
-              ))}
+            <h4 className="text-xs font-bold uppercase tracking-wider text-white mb-3">Popular Categories</h4>
+            <ul className="space-y-2 text-xs">
               <li>
-                <Link to="/products" className="text-emerald-500 hover:underline font-semibold">
-                  View All Catalogue &rarr;
+                <Link to="/products?category=foundation-bb-cream" className="hover:text-white transition-colors">
+                  Foundation & BB Cream
+                </Link>
+              </li>
+              <li>
+                <Link to="/products?category=eyeshadow-palettes" className="hover:text-white transition-colors">
+                  Eyeshadow Palettes
+                </Link>
+              </li>
+              <li>
+                <Link to="/products?category=eyeliner-kajal" className="hover:text-white transition-colors">
+                  Eyeliner & Kajal
+                </Link>
+              </li>
+              <li>
+                <Link to="/products?category=lipstick-lip-crayon" className="hover:text-white transition-colors">
+                  Lipstick & Lip Care
+                </Link>
+              </li>
+              <li>
+                <Link to="/whats-new" className="hover:text-white transition-colors">
+                  What's New Launches
+                </Link>
+              </li>
+              <li>
+                <Link to="/products" className="text-emerald-400 hover:text-emerald-300 font-semibold">
+                  All Collections →
                 </Link>
               </li>
             </ul>
           </div>
 
           <div>
-            <h4 className="text-xs font-bold uppercase tracking-wider text-white mb-3">Customer Service</h4>
-            <ul className="space-y-2">
-              <li><Link to="/faqs" className="hover:text-white transition-colors">Frequently Asked Questions (FAQs)</Link></li>
-              <li><Link to="/shipping-policy" className="hover:text-white transition-colors">Shipping & Delivery Policy</Link></li>
-              <li><Link to="/return-policy" className="hover:text-white transition-colors">Returns & Refunds (7-Day)</Link></li>
-              <li><Link to="/contact" className="hover:text-white transition-colors">Customer Help & Support</Link></li>
-              <li><Link to="/account" className="hover:text-white transition-colors">My Customer Account</Link></li>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-white mb-3">Customer Support</h4>
+            <ul className="space-y-2 text-xs">
+              <li><Link to="/track-order" className="hover:text-white transition-colors">Track Your Order</Link></li>
+              <li><Link to="/account" className="hover:text-white transition-colors">Manage Delivery Addresses</Link></li>
+              <li><Link to="/faqs" className="hover:text-white transition-colors">Frequently Asked Questions (FAQ)</Link></li>
+              <li><Link to="/contact" className="hover:text-white transition-colors">Help Center & Grievance Contact</Link></li>
             </ul>
           </div>
 
@@ -385,18 +841,23 @@ export function StorefrontLayout() {
             <p className="text-xs text-gray-400 leading-relaxed mb-3">
               Certified Razorpay payment integration supporting UPI, NetBanking, and credit/debit cards. Encrypted via 256-bit SSL.
             </p>
-            <ul className="space-y-1 text-[11px]">
+            <ul className="space-y-1.5 text-[11px]">
+              <li><Link to="/shipping-policy" className="hover:text-white transition-colors">Shipping Policy</Link></li>
+              <li><Link to="/return-policy" className="hover:text-white transition-colors">Return & Refund Policy</Link></li>
               <li><Link to="/privacy-policy" className="hover:text-white transition-colors">Privacy Policy</Link></li>
               <li><Link to="/terms" className="hover:text-white transition-colors">Terms of Service</Link></li>
-              <li><Link to="/about" className="hover:text-white transition-colors">About Our Platform</Link></li>
+              <li><Link to="/about" className="hover:text-white transition-colors">About MOSMAC</Link></li>
             </ul>
           </div>
         </div>
 
         <div className="border-t border-slate-900 py-6 text-center text-xs text-gray-500">
-          © {new Date().getFullYear()} E-Commerce Platform. Built for high performance, security, and verified Indian consumer fulfillment.
+          © {new Date().getFullYear()} MOSMAC. Built for high performance, security, and verified Indian consumer fulfillment.
         </div>
       </footer>
+
+      {/* Global Auth Modal for Guest Add to Bag / Wishlist */}
+      <AuthModal />
     </div>
   );
 }

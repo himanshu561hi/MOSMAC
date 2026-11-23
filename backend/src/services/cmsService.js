@@ -1,5 +1,6 @@
 import { Banner } from '../models/Banner.js';
 import { HomepageSection } from '../models/HomepageSection.js';
+import { HomepageSectionProduct } from '../models/HomepageSectionProduct.js';
 import { ContentPage } from '../models/ContentPage.js';
 import { FAQ } from '../models/FAQ.js';
 import { StoreSettings } from '../models/StoreSettings.js';
@@ -546,6 +547,179 @@ export const cmsService = {
     });
 
     return settings;
+  },
+
+  async getWhatsNewData() {
+    const settings = await this.getStoreSettings();
+    const config = settings.whatsNewPageConfig || {
+      heroBanner: { enabled: true },
+      newBrands: { enabled: true },
+      justDropped: { enabled: true },
+      onlyOnMosmac: { enabled: true },
+      trendingNow: { enabled: true }
+    };
+
+    const results = {
+      config,
+      heroBanner: config.heroBanner || null,
+      newBrands: [],
+      justDropped: [],
+      onlyOnMosmac: [],
+      trendingNow: [],
+      categories: []
+    };
+
+    const tasks = [];
+
+    // Categories for filter pills
+    tasks.push(
+      Category.find({ isActive: true, parentId: null })
+        .sort({ displayOrder: 1 })
+        .select('name slug')
+        .lean()
+        .then((cats) => { results.categories = cats; })
+    );
+
+    // New Brands
+    if (config.newBrands?.enabled !== false) {
+      tasks.push(
+        Brand.find({ isActive: true })
+          .sort({ isNewlyAdded: -1, createdAt: -1 })
+          .limit(8)
+          .select('name slug logoUrl description isNewlyAdded')
+          .lean()
+          .then((brands) => { results.newBrands = brands; })
+      );
+    }
+
+    // Helper to query products based on admin category -> subcategory -> specific products selection
+    const resolveSectionProducts = async (sectionConfig, defaultFilter = {}, defaultSort = { createdAt: -1 }, limit = 12) => {
+      if (sectionConfig?.productIds && sectionConfig.productIds.length > 0) {
+        const prods = await Product.find({
+          _id: { $in: sectionConfig.productIds },
+          status: 'published'
+        })
+          .populate('brandId', 'name slug logoUrl')
+          .populate('categoryId', 'name slug')
+          .lean();
+        if (prods.length > 0) return prods;
+      }
+
+      const query = { status: 'published', ...defaultFilter };
+
+      if (sectionConfig?.subcategoryId) {
+        query.categoryId = sectionConfig.subcategoryId;
+      } else if (sectionConfig?.categoryId) {
+        const descendantCategories = await Category.find({
+          $or: [{ 'ancestors._id': sectionConfig.categoryId }, { parentId: sectionConfig.categoryId }]
+        }).select('_id');
+        query.categoryId = { $in: [sectionConfig.categoryId, ...descendantCategories.map((c) => c._id)] };
+      }
+
+      return Product.find(query)
+        .sort(defaultSort)
+        .limit(sectionConfig?.limit || limit)
+        .populate('brandId', 'name slug logoUrl')
+        .populate('categoryId', 'name slug')
+        .lean();
+    };
+
+    // Just Dropped (latest published products or curated selection)
+    if (config.justDropped?.enabled !== false) {
+      tasks.push(
+        resolveSectionProducts(config.justDropped, {}, { createdAt: -1 }, 12).then((prods) => {
+          results.justDropped = prods;
+        })
+      );
+    }
+
+    // Only On MOSMAC (Exclusives or curated selection)
+    if (config.onlyOnMosmac?.enabled !== false) {
+      tasks.push(
+        resolveSectionProducts(
+          config.onlyOnMosmac,
+          {
+            $or: [
+              { badges: { $in: ['EXCLUSIVE', 'ONLY ON MOSMAC', 'NEW'] } },
+              { isFeatured: true }
+            ]
+          },
+          { ratingsAverage: -1, createdAt: -1 },
+          10
+        ).then((prods) => {
+          results.onlyOnMosmac = prods.length > 0 ? prods : (results.justDropped || []).slice(0, 6);
+        })
+      );
+    }
+
+    // Trending Now (Synced with Admin Homepage Section: 'trending')
+    if (config.trendingNow?.enabled !== false) {
+      tasks.push(
+        (async () => {
+          try {
+            const trendingSec = await HomepageSection.findOne({ slug: 'trending' });
+            if (trendingSec) {
+              const assignments = await HomepageSectionProduct.find({ sectionId: trendingSec._id })
+                .sort({ displayOrder: 1 })
+                .populate({
+                  path: 'productId',
+                  match: { status: 'published' },
+                  populate: [
+                    { path: 'brandId', select: 'name slug logoUrl' },
+                    { path: 'categoryId', select: 'name slug' }
+                  ]
+                })
+                .lean();
+
+              const assignedProds = assignments.map((a) => a.productId).filter(Boolean);
+              if (assignedProds.length > 0) {
+                results.trendingNow = assignedProds.slice(0, config.trendingNow?.limit || 8);
+                return;
+              }
+            }
+          } catch (e) {
+            console.error('Error fetching admin trending section products:', e);
+          }
+
+          const fallbackProds = await resolveSectionProducts(config.trendingNow, {}, { 'ratings.average': -1, createdAt: -1 }, 8);
+          results.trendingNow = fallbackProds;
+        })()
+      );
+    }
+
+    await Promise.all(tasks);
+    return results;
+  },
+
+  async getAdminWhatsNewConfig() {
+    const settings = await this.getStoreSettings();
+    return settings.whatsNewPageConfig;
+  },
+
+  async updateAdminWhatsNewConfig(newConfig, staffUser) {
+    let settings = await StoreSettings.findOne();
+    if (!settings) {
+      settings = await StoreSettings.create({ whatsNewPageConfig: newConfig });
+    } else {
+      settings.whatsNewPageConfig = {
+        ...settings.whatsNewPageConfig,
+        ...newConfig
+      };
+      settings.markModified('whatsNewPageConfig');
+      await settings.save();
+    }
+
+    await auditService.log({
+      actorId: staffUser._id,
+      actorRole: staffUser.role,
+      actorEmail: staffUser.email,
+      action: 'WHATS_NEW_PAGE_CONFIG_UPDATED',
+      resourceType: 'StoreSettings',
+      resourceId: settings._id,
+      notes: "What's New page sections & banner configuration updated"
+    });
+
+    return settings.whatsNewPageConfig;
   }
 };
 

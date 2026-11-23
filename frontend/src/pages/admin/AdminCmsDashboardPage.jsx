@@ -3,10 +3,9 @@ import { Link } from 'react-router-dom';
 import {
   LayoutTemplate,
   Image as ImageIcon,
-  FileText,
   HelpCircle,
   Star,
-  Compass,
+  Sparkles,
   Settings,
   Mail,
   FolderOpen,
@@ -22,39 +21,18 @@ const CMS_MODULES = [
     color: 'bg-indigo-50 text-indigo-600 border-indigo-200'
   },
   {
+    title: '"What\'s New" Page Manager',
+    description: 'Configure section visibility checkboxes (Hero Banner, New Brands, Just Dropped, Exclusives) for the /whats-new page.',
+    href: '/admin/cms/whats-new',
+    icon: Sparkles,
+    color: 'bg-rose-50 text-rose-600 border-rose-200'
+  },
+  {
     title: 'Hero & Promo Banners',
     description: 'Manage desktop/mobile banner images, campaign schedules, and call-to-action click destinations.',
     href: '/admin/cms/banners',
     icon: ImageIcon,
     color: 'bg-emerald-50 text-emerald-600 border-emerald-200'
-  },
-  {
-    title: 'Content Pages & Policies',
-    description: 'Edit About Us, Terms of Service, Privacy, and Shipping/Refund policies with automatic revision history.',
-    href: '/admin/cms/pages',
-    icon: FileText,
-    color: 'bg-amber-50 text-amber-600 border-amber-200'
-  },
-  {
-    title: 'Product Reviews & Moderation',
-    description: 'Review verified purchaser feedback, moderate submitted testimonials, and maintain honest rating scores.',
-    href: '/admin/reviews',
-    icon: Star,
-    color: 'bg-yellow-50 text-yellow-600 border-yellow-200'
-  },
-  {
-    title: 'Frequently Asked Questions',
-    description: 'Organize customer service Q&A items into categorized accordion sections for instant self-help.',
-    href: '/admin/cms/faqs',
-    icon: HelpCircle,
-    color: 'bg-blue-50 text-blue-600 border-blue-200'
-  },
-  {
-    title: 'Navigation & Menu Bar',
-    description: 'Configure top header navigation links, category dropdown triggers, and multi-column footer links.',
-    href: '/admin/cms/navigation',
-    icon: Compass,
-    color: 'bg-purple-50 text-purple-600 border-purple-200'
   },
   {
     title: 'Store Settings & Policies',
@@ -68,7 +46,7 @@ const CMS_MODULES = [
     description: 'Customize transactional emails and SMS copy with live variable preview for all customer milestones.',
     href: '/admin/cms/templates',
     icon: Mail,
-    color: 'bg-rose-50 text-rose-600 border-rose-200'
+    color: 'bg-purple-50 text-purple-600 border-purple-200'
   },
   {
     title: 'Media Asset Library',

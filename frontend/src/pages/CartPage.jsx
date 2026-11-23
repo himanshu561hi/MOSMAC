@@ -25,6 +25,7 @@ import {
   clearWarnings
 } from '@/store/slices/cartSlice';
 import { addToWishlist } from '@/store/slices/wishlistSlice';
+import { addToast, setAuthModalOpen, setPendingAction } from '@/store/slices/uiSlice';
 import Button from '@/components/common/Button';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import Alert from '@/components/common/Alert';
@@ -51,6 +52,7 @@ export function CartPage() {
     isMutating,
     error
   } = useSelector((state) => state.cart);
+  const { isAuthenticated } = useSelector((state) => state.auth);
 
   const [couponInput, setCouponInput] = useState('');
   const [couponError, setCouponError] = useState('');
@@ -59,19 +61,36 @@ export function CartPage() {
     dispatch(fetchCart());
   }, [dispatch]);
 
-  const handleUpdateQuantity = (sku, newQty) => {
+  const handleUpdateQuantity = async (sku, newQty) => {
     if (newQty < 1 || newQty > 10) return;
-    dispatch(updateCartQuantity({ sku, quantity: newQty }));
+    try {
+      await dispatch(updateCartQuantity({ sku, quantity: newQty })).unwrap();
+    } catch (err) {
+      const msg = typeof err === 'string' ? err : (err?.message || 'Failed to update item quantity');
+      dispatch(addToast({ type: 'error', message: msg }));
+    }
   };
 
-  const handleRemoveItem = (sku) => {
-    dispatch(removeCartItem(sku));
+  const handleRemoveItem = async (sku) => {
+    try {
+      await dispatch(removeCartItem(sku)).unwrap();
+      dispatch(addToast({ type: 'info', message: 'Item removed from your bag' }));
+    } catch (err) {
+      const msg = typeof err === 'string' ? err : (err?.message || 'Failed to remove item');
+      dispatch(addToast({ type: 'error', message: msg }));
+    }
   };
 
-  const handleMoveToWishlist = (item) => {
+  const handleMoveToWishlist = async (item) => {
     const prodId = typeof item.productId === 'object' ? item.productId?._id : item.productId;
-    dispatch(addToWishlist({ productId: prodId, sku: item.sku }));
-    dispatch(removeCartItem(item.sku));
+    try {
+      await dispatch(addToWishlist({ productId: prodId, sku: item.sku })).unwrap();
+      await dispatch(removeCartItem(item.sku)).unwrap();
+      dispatch(addToast({ type: 'success', message: 'Item moved to your Wishlist' }));
+    } catch (err) {
+      const msg = typeof err === 'string' ? err : (err?.message || 'Failed to save to Wishlist');
+      dispatch(addToast({ type: 'error', message: msg }));
+    }
   };
 
   const handleApplyCoupon = async (e) => {
@@ -80,20 +99,35 @@ export function CartPage() {
     setCouponError('');
     try {
       await dispatch(applyCoupon(couponInput.trim().toUpperCase())).unwrap();
+      dispatch(addToast({ type: 'success', message: `Coupon code '${couponInput.trim().toUpperCase()}' applied!` }));
       setCouponInput('');
     } catch (err) {
-      setCouponError(err || 'Failed to apply coupon');
+      const msg = typeof err === 'string' ? err : (err?.message || 'Failed to apply coupon');
+      setCouponError(msg);
+      dispatch(addToast({ type: 'error', message: msg }));
     }
   };
 
   const handleRemoveCoupon = async () => {
     setCouponError('');
-    dispatch(removeCoupon());
+    try {
+      await dispatch(removeCoupon()).unwrap();
+      dispatch(addToast({ type: 'info', message: 'Coupon removed' }));
+    } catch (err) {
+      const msg = typeof err === 'string' ? err : (err?.message || 'Failed to remove coupon');
+      dispatch(addToast({ type: 'error', message: msg }));
+    }
   };
 
-  const handleClearCart = () => {
+  const handleClearCart = async () => {
     if (window.confirm('Are you sure you want to remove all items from your bag?')) {
-      dispatch(clearCart());
+      try {
+        await dispatch(clearCart()).unwrap();
+        dispatch(addToast({ type: 'info', message: 'Shopping bag cleared' }));
+      } catch (err) {
+        const msg = typeof err === 'string' ? err : (err?.message || 'Failed to clear bag');
+        dispatch(addToast({ type: 'error', message: msg }));
+      }
     }
   };
 
@@ -183,9 +217,12 @@ export function CartPage() {
             </button>
           </div>
           <ul className="space-y-1 text-xs text-amber-800 list-disc list-inside">
-            {warnings.map((msg, idx) => (
-              <li key={idx}>{msg}</li>
-            ))}
+            {warnings.map((warn, idx) => {
+              const text = typeof warn === 'object' && warn !== null
+                ? (warn.message || warn.sku || 'Cart item update')
+                : String(warn);
+              return <li key={idx}>{text}</li>;
+            })}
           </ul>
         </div>
       )}
@@ -198,19 +235,24 @@ export function CartPage() {
         <div className="lg:col-span-8 space-y-4">
           <div className="bg-white rounded-3xl border border-gray-200/70 shadow-2xs divide-y divide-gray-100 overflow-hidden">
             {items.map((item) => {
-              const product = typeof item.productId === 'object' ? item.productId : null;
-              const productTitle = product?.title || 'Product Unavailable';
-              const productSlug = product?.slug || '';
-              const brandName = product?.brandId?.name || '';
-              const primaryImage = product?.images?.find((img) => img.isPrimary)?.url || product?.images?.[0]?.url;
+              const product = typeof item.productId === 'object' && item.productId !== null ? item.productId : null;
+              const productTitle = item.title || product?.title || 'Product Unavailable';
+              const productSlug = item.slug || product?.slug || '';
+              const brandName = typeof item.brandId === 'object' && item.brandId !== null
+                ? (item.brandId.name || '')
+                : (typeof product?.brandId === 'object' && product?.brandId !== null
+                    ? (product.brandId.name || '')
+                    : (typeof item.brandId === 'string' ? item.brandId : ''));
+              const primaryImage = item.imageUrl || (Array.isArray(product?.images) ? (product.images.find((img) => img?.isPrimary)?.url || product.images[0]?.url) : '') || '';
 
-              const isItemOutOfStock = item.isOutOfStock || false;
-              const itemPrice = item.effectivePrice || item.addedPrice || 0;
-              const lineTotal = itemPrice * item.quantity;
+              const isItemOutOfStock = item.isOutOfStock || (item.isAvailable === false && item.reason === 'Out of stock');
+              const isUnavailable = item.isAvailable === false && !isItemOutOfStock;
+              const itemPrice = typeof item.unitPrice === 'number' ? item.unitPrice : (item.effectivePrice || item.addedPrice || 0);
+              const lineTotal = typeof item.itemTotal === 'number' ? item.itemTotal : (itemPrice * (item.quantity || 1));
 
               return (
                 <div
-                  key={item._id || item.sku}
+                  key={item._id || item.sku || Math.random()}
                   className="p-4 sm:p-6 flex flex-col sm:flex-row gap-4 sm:gap-6 items-start justify-between transition-colors hover:bg-gray-50/40"
                 >
                   {/* Thumbnail & Product Details */}
@@ -247,18 +289,18 @@ export function CartPage() {
                       <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
                         {item.variantTitle && (
                           <span className="bg-gray-100 px-2 py-0.5 rounded-md font-medium text-gray-700">
-                            {item.variantTitle}
+                            {typeof item.variantTitle === 'object' ? JSON.stringify(item.variantTitle) : String(item.variantTitle)}
                           </span>
                         )}
                         <span className="font-mono text-[11px] text-gray-400">
-                          SKU: {item.sku}
+                          SKU: {typeof item.sku === 'object' ? JSON.stringify(item.sku) : String(item.sku || '')}
                         </span>
                       </div>
 
-                      {isItemOutOfStock && (
-                        <div className="inline-flex items-center gap-1 text-xs font-semibold text-rose-600">
+                      {(isItemOutOfStock || isUnavailable) && (
+                        <div className="inline-flex items-center gap-1 text-xs font-semibold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md">
                           <AlertCircle className="w-3.5 h-3.5" />
-                          Currently Out of Stock
+                          {typeof item.reason === 'object' ? (item.reason.message || JSON.stringify(item.reason)) : (item.reason || (isItemOutOfStock ? 'Currently Out of Stock' : 'Item Unavailable'))}
                         </div>
                       )}
 
@@ -284,7 +326,7 @@ export function CartPage() {
                     <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden bg-white shadow-2xs">
                       <button
                         type="button"
-                        disabled={item.quantity <= 1 || isMutating}
+                        disabled={item.quantity <= 1 || isMutating || isUnavailable}
                         onClick={() => handleUpdateQuantity(item.sku, item.quantity - 1)}
                         className="px-2.5 py-1 text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed font-bold text-xs"
                         aria-label="Decrease quantity"
@@ -296,7 +338,7 @@ export function CartPage() {
                       </span>
                       <button
                         type="button"
-                        disabled={item.quantity >= 10 || isMutating}
+                        disabled={item.quantity >= 10 || isMutating || isItemOutOfStock || isUnavailable}
                         onClick={() => handleUpdateQuantity(item.sku, item.quantity + 1)}
                         className="px-2.5 py-1 text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed font-bold text-xs"
                         aria-label="Increase quantity"
@@ -490,12 +532,30 @@ export function CartPage() {
             </div>
 
             {/* Checkout CTA */}
+            {items.some((item) => item.isAvailable === false || item.isOutOfStock) && (
+              <p className="text-[11px] text-amber-700 bg-amber-50 p-2.5 rounded-xl border border-amber-200">
+                Some items in your bag are unavailable or out of stock. Please remove them to proceed to checkout.
+              </p>
+            )}
             <Button
               type="button"
               variant="primary"
               size="lg"
-              onClick={() => navigate('/checkout')}
-              className="w-full flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/10"
+              disabled={items.some((item) => item.isAvailable === false || item.isOutOfStock) || items.length === 0}
+              onClick={() => {
+                if (!isAuthenticated) {
+                  dispatch(
+                    setPendingAction({
+                      type: 'checkout',
+                      redirectTo: '/checkout'
+                    })
+                  );
+                  dispatch(setAuthModalOpen(true));
+                  return;
+                }
+                navigate('/checkout');
+              }}
+              className="w-full flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/10 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <span>Proceed to Checkout</span>
               <ArrowRight className="w-4 h-4" />

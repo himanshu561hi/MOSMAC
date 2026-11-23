@@ -141,7 +141,13 @@ export async function removeCoupon(req, res, next) {
 export async function mergeCart(req, res, next) {
   try {
     const userId = req.user._id;
-    const { guestId } = req.body;
+    const guestId = req.body?.guestId || req.headers['x-guest-id'] || req.cookies?.guest_id || null;
+
+    if (!guestId) {
+      const userCart = await cartService.getOrCreateCart({ userId });
+      const validatedCart = await cartService.populateAndValidateCart(userCart, { userId });
+      return sendSuccess(res, HTTP_STATUS.OK, 'Cart retrieved successfully', { cart: validatedCart });
+    }
 
     const mergedCart = await cartService.mergeGuestCart({ userId, guestId });
 

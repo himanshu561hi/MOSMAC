@@ -17,6 +17,7 @@ import {
 import { adminService, downloadCsv } from '@/services/adminService';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { BulkActionButtons } from '@/components/admin/BulkActionButtons';
+import Pagination from '@/components/common/Pagination';
 
 export function AdminCustomersPage() {
   const [customers, setCustomers] = useState([]);
@@ -260,28 +261,16 @@ export function AdminCustomersPage() {
         </div>
 
         {/* Pagination Controls */}
-        <div className="p-4 border-t border-gray-200 flex items-center justify-between text-xs text-gray-500">
+        <div className="p-4 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-500">
           <div>
             Showing {customers.length} of {pagination.total} customers (Page {pagination.page} of {pagination.pages})
           </div>
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              disabled={pagination.page <= 1}
-              onClick={() => loadCustomers(pagination.page - 1)}
-              className="p-1.5 rounded border border-gray-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              disabled={pagination.page >= pagination.pages}
-              onClick={() => loadCustomers(pagination.page + 1)}
-              className="p-1.5 rounded border border-gray-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
+          <Pagination
+            totalPages={pagination.pages}
+            value={pagination.page}
+            onChange={(newPage) => loadCustomers(newPage)}
+            size="sm"
+          />
         </div>
       </div>
 

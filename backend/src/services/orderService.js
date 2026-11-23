@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import mongoose from 'mongoose';
 import { Order, ORDER_STATUSES, PAYMENT_STATUSES } from '../models/Order.js';
 import { Payment } from '../models/Payment.js';
 import { WebhookEvent } from '../models/WebhookEvent.js';
@@ -14,10 +15,11 @@ import { ERROR_CODES } from '../constants/errorCodes.js';
 // Allowed state transitions map
 const VALID_ORDER_STATUS_TRANSITIONS = {
   placed: ['confirmed', 'cancelled'],
+  pending: ['confirmed', 'cancelled'],
   confirmed: ['processing', 'cancelled'],
   processing: ['shipped', 'cancelled'],
-  shipped: ['out_for_delivery'],
-  out_for_delivery: ['delivered'],
+  shipped: ['out_for_delivery', 'delivered', 'cancelled'],
+  out_for_delivery: ['delivered', 'cancelled'],
   delivered: ['returned'],
   cancelled: [],
   returned: []
@@ -431,10 +433,26 @@ export const orderService = {
   /**
    * Retrieves order details with strict privacy / IDOR ownership checks.
    */
-  async getOrderDetails({ orderNumber, userId = null, guestEmail = '', guestPhone = '' }) {
-    const order = await Order.findOne({ orderNumber }).lean();
+  async getOrderDetails({ orderNumber, orderId = null, userId = null, guestEmail = '', guestPhone = '', isAdmin = false }) {
+    let query;
+    if (orderId && mongoose.isValidObjectId(orderId)) {
+      query = { _id: orderId };
+    } else if (orderNumber && mongoose.isValidObjectId(orderNumber)) {
+      query = { $or: [{ orderNumber }, { _id: orderNumber }] };
+    } else if (orderNumber) {
+      query = { orderNumber };
+    } else {
+      throw ApiError.badRequest('Order identifier is required', ERROR_CODES.VALIDATION_ERROR);
+    }
+
+    const order = await Order.findOne(query).lean();
     if (!order) {
-      throw ApiError.notFound(`Order '${orderNumber}' not found`, ERROR_CODES.RESOURCE_NOT_FOUND);
+      throw ApiError.notFound(`Order '${orderNumber || orderId}' not found`, ERROR_CODES.RESOURCE_NOT_FOUND);
+    }
+
+    // Admin bypasses ownership and guest verification
+    if (isAdmin) {
+      return order;
     }
 
     // Authenticated access verification
@@ -584,7 +602,12 @@ export const orderService = {
       throw ApiError.badRequest(`Invalid order status: ${newStatus}`, ERROR_CODES.VALIDATION_ERROR);
     }
 
-    const order = await Order.findById(orderId);
+    let order;
+    if (mongoose.isValidObjectId(orderId)) {
+      order = await Order.findById(orderId);
+    } else {
+      order = await Order.findOne({ $or: [{ _id: orderId }, { orderNumber: orderId }] });
+    }
     if (!order) {
       throw ApiError.notFound('Order not found', ERROR_CODES.RESOURCE_NOT_FOUND);
     }

@@ -31,7 +31,8 @@ export const registerSchema = z.object({
     phone: z
       .string()
       .regex(/^[6-9]\d{9}$/, 'Phone number must be a valid 10-digit Indian mobile number')
-      .optional()
+      .optional(),
+    guestId: z.string().trim().optional()
   }).strict()
 });
 
@@ -42,7 +43,8 @@ export const loginSchema = z.object({
       .email('Please provide a valid email address')
       .trim()
       .toLowerCase(),
-    password: z.string().min(1, 'Password is required')
+    password: z.string().min(1, 'Password is required'),
+    guestId: z.string().trim().optional()
   }).strict()
 });
 

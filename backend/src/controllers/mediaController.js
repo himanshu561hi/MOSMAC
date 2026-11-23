@@ -1,10 +1,59 @@
 import {
   generateSignedUploadParams,
   deleteCloudinaryAsset,
-  validateImageUploadRequest
+  validateImageUploadRequest,
+  uploadFileToCloudinary
 } from '../integrations/cloudinaryAdapter.js';
 import { sendSuccess } from '../utils/responseFormatter.js';
 import { HTTP_STATUS } from '../constants/httpStatusCodes.js';
+import { ApiError } from '../utils/ApiError.js';
+import { mediaAssetService } from '../services/mediaAssetService.js';
+import logger from '../utils/logger.js';
+
+export async function uploadImages(req, res, next) {
+  try {
+    const files = req.files || (req.file ? [req.file] : []);
+    if (!files || files.length === 0) {
+      throw ApiError.badRequest('No image files provided for upload');
+    }
+
+    const folder = req.body?.folder || 'ecommerce/products';
+    const uploadedImages = [];
+
+    for (const file of files) {
+      validateImageUploadRequest(file.mimetype, file.size);
+      const uploaded = await uploadFileToCloudinary(file.buffer, file.originalname, folder);
+
+      // Record in MediaAsset registry
+      try {
+        await mediaAssetService.recordAsset(
+          {
+            publicId: uploaded.publicId,
+            url: uploaded.url,
+            secureUrl: uploaded.url,
+            format: uploaded.format,
+            bytes: uploaded.bytes,
+            width: uploaded.width || 0,
+            height: uploaded.height || 0,
+            altText: uploaded.alt || file.originalname,
+            folder
+          },
+          req.user
+        );
+      } catch (assetErr) {
+        logger.warn('Failed to record media asset:', assetErr.message);
+      }
+
+      uploadedImages.push(uploaded);
+    }
+
+    return sendSuccess(res, HTTP_STATUS.CREATED, 'Images uploaded successfully', {
+      images: uploadedImages
+    });
+  } catch (error) {
+    next(error);
+  }
+}
 
 export async function getUploadSignature(req, res, next) {
   try {
@@ -34,6 +83,7 @@ export async function deleteAsset(req, res, next) {
 }
 
 export default {
+  uploadImages,
   getUploadSignature,
   deleteAsset
 };

@@ -72,7 +72,12 @@ export async function moveToCart(req, res, next) {
 export async function mergeWishlist(req, res, next) {
   try {
     const userId = req.user._id;
-    const { guestId } = req.body;
+    const guestId = req.body?.guestId || req.headers['x-guest-id'] || req.cookies?.guest_id || null;
+
+    if (!guestId) {
+      const wishlist = await wishlistService.getPopulatedWishlist({ userId });
+      return sendSuccess(res, HTTP_STATUS.OK, 'Wishlist retrieved successfully', { wishlist });
+    }
 
     const wishlist = await wishlistService.mergeGuestWishlist({ userId, guestId });
 

@@ -1,5 +1,6 @@
 import { checkoutQuoteService } from '../services/checkoutQuoteService.js';
 import { codService } from '../services/codService.js';
+import { Cart } from '../models/Cart.js';
 import { sendSuccess } from '../utils/responseFormatter.js';
 import { checkoutQuoteSchema } from '../validators/orderValidators.js';
 
@@ -11,9 +12,24 @@ export const checkoutController = {
     try {
       const validated = checkoutQuoteSchema.parse(req.body);
       const userId = req.user ? req.user._id : null;
+      const guestId = req.headers['x-guest-id'] || req.cookies?.guestId || null;
+
+      let quoteItems = validated.items;
+      if (!quoteItems || quoteItems.length === 0) {
+        if (userId || guestId) {
+          const cart = await Cart.findOne(userId ? { userId } : { guestId });
+          if (cart?.items?.length > 0) {
+            quoteItems = cart.items.map((i) => ({
+              productId: i.productId.toString(),
+              sku: i.sku,
+              quantity: i.quantity
+            }));
+          }
+        }
+      }
 
       const quote = await checkoutQuoteService.generateQuote({
-        items: validated.items,
+        items: quoteItems || [],
         couponCode: validated.couponCode,
         postalCode: validated.postalCode,
         userId

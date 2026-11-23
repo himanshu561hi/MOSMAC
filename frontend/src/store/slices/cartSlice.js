@@ -118,18 +118,19 @@ export const mergeGuestCart = createAsyncThunk(
 
 const applyCartPayload = (state, payload) => {
   if (!payload) return;
-  state.items = payload.items || [];
-  state.itemCount = payload.itemCount || 0;
-  state.distinctItemCount = payload.distinctItemCount || (payload.items ? payload.items.length : 0);
-  state.subtotal = payload.subtotal || 0;
-  state.discountAmount = payload.discountAmount || 0;
-  state.shippingFee = payload.shippingFee || 0;
-  state.grandTotal = payload.grandTotal || 0;
-  state.freeShippingThreshold = payload.freeShippingThreshold || 99900;
-  state.freeShippingEligible = payload.freeShippingEligible || false;
-  state.amountNeededForFreeShipping = Math.max(0, (payload.freeShippingThreshold || 99900) - (payload.subtotal || 0));
-  state.appliedCoupon = payload.appliedCoupon || null;
-  state.warnings = payload.warnings || [];
+  const cart = payload.cart || payload;
+  state.items = cart.items || [];
+  state.itemCount = cart.itemCount || (cart.items ? cart.items.reduce((sum, item) => sum + (item.quantity || 1), 0) : 0);
+  state.distinctItemCount = cart.distinctItemCount || (cart.items ? cart.items.length : 0);
+  state.subtotal = cart.subtotal || 0;
+  state.discountAmount = cart.discountAmount || 0;
+  state.shippingFee = cart.shippingFee || 0;
+  state.grandTotal = cart.grandTotal || 0;
+  state.freeShippingThreshold = cart.freeShippingThreshold || 99900;
+  state.freeShippingEligible = cart.freeShippingEligible || false;
+  state.amountNeededForFreeShipping = Math.max(0, (cart.freeShippingThreshold || 99900) - (cart.subtotal || 0));
+  state.appliedCoupon = cart.appliedCoupon || null;
+  state.warnings = cart.warnings || [];
   state.error = null;
 };
 

@@ -143,6 +143,45 @@ const storeSettingsSchema = new mongoose.Schema(
           ]
         }
       ]
+    },
+    whatsNewPageConfig: {
+      type: mongoose.Schema.Types.Mixed,
+      default: () => ({
+        heroBanner: {
+          enabled: true,
+          badge: 'NEW BEAUTY DROPS',
+          title: 'THE MODERN BEAUTY SCENE',
+          subtitle: 'Discover fresh arrivals in luxury cosmetics, radiant complexion & viral beauty drops',
+          ctaText: 'Shop New Arrivals',
+          ctaLink: '/products?sortBy=newest',
+          imageUrl: '/images/editorial/get-the-look-model.jpg',
+          bgColor: '#FDF1EE'
+        },
+        newBrands: {
+          enabled: true,
+          title: 'New Brands On MOSMAC',
+          subtitle: 'Recently onboarded premium brands & authorized flagships'
+        },
+        justDropped: {
+          enabled: true,
+          title: 'Just Dropped',
+          subtitle: 'Fresh arrivals across top categories',
+          showCategoryPills: true,
+          limit: 12
+        },
+        onlyOnMosmac: {
+          enabled: true,
+          title: 'Only On MOSMAC',
+          subtitle: 'Curated products & limited editions available exclusively with us',
+          limit: 10
+        },
+        trendingNow: {
+          enabled: true,
+          title: 'Trending Now',
+          subtitle: 'Community favorites & high-demand items this week',
+          limit: 8
+        }
+      })
     }
   },
   {

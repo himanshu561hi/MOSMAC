@@ -77,8 +77,9 @@ export const mergeGuestWishlist = createAsyncThunk(
 
 const applyWishlistPayload = (state, payload) => {
   if (!payload) return;
-  state.items = payload.items || [];
-  state.itemCount = payload.itemCount ?? (payload.items ? payload.items.length : 0);
+  const wishlist = payload.wishlist || payload;
+  state.items = wishlist.items || [];
+  state.itemCount = wishlist.itemCount ?? (wishlist.items ? wishlist.items.length : 0);
   state.error = null;
 };
 

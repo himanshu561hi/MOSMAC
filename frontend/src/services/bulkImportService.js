@@ -73,7 +73,8 @@ export const bulkImportService = {
     const response = await apiClient.post(`/admin/bulk/${module}/validate`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
-      }
+      },
+      timeout: 300000 // 5 minutes for large ZIP upload & extraction
     });
 
     return response.data?.data || response.data;
@@ -83,11 +84,17 @@ export const bulkImportService = {
    * Executes a validated import job with mode (create_only, update_existing, create_update) and replaceImages flag
    */
   async executeImport(module, jobId, importMode = 'create_only', replaceImages = false) {
-    const response = await apiClient.post(`/admin/bulk/${module}/execute`, {
-      jobId,
-      importMode,
-      replaceImages: Boolean(replaceImages)
-    });
+    const response = await apiClient.post(
+      `/admin/bulk/${module}/execute`,
+      {
+        jobId,
+        importMode,
+        replaceImages: Boolean(replaceImages)
+      },
+      {
+        timeout: 900000 // 15 minutes timeout so Cloudinary batch uploads never abort
+      }
+    );
 
     return response.data?.data || response.data;
   },

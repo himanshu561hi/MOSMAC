@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import {
+  getPublicActiveCoupons,
   validateCoupon,
   getAdminCoupons,
   createCoupon,
@@ -15,6 +16,9 @@ import {
 import { ROLES } from '../constants/roles.js';
 
 export const couponRoutes = Router();
+
+// Public Active Coupons (for storefront banners & offers ticker)
+couponRoutes.get('/active', getPublicActiveCoupons);
 
 // Public Coupon Check
 couponRoutes.post('/validate', optionalAuthenticate, validate(applyCouponSchema), validateCoupon);

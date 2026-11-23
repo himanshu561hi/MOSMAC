@@ -114,8 +114,14 @@ export function WishlistPage() {
           if (!product) return null;
 
           const productId = product._id;
-          const images = product.images || [];
-          const primaryImg = images.find((i) => i.isPrimary)?.url || images[0]?.url;
+          const images = Array.isArray(product.images) ? product.images : [];
+          const primaryImg =
+            (typeof product.imageUrl === 'string' && product.imageUrl.trim() ? product.imageUrl.trim() : null) ||
+            images.find((i) => i?.isPrimary && typeof i?.url === 'string')?.url ||
+            images.find((i) => typeof i?.url === 'string')?.url ||
+            (typeof images[0] === 'string' && images[0].trim() ? images[0].trim() : null) ||
+            (images[0] && typeof images[0] === 'object' && typeof images[0]?.url === 'string' ? images[0].url : null) ||
+            null;
 
           const totalStock = product.variants?.reduce((sum, v) => sum + (v.stockQuantity || 0), 0) ?? 0;
           const isOutOfStock = totalStock <= 0;

@@ -38,13 +38,15 @@ export function AdminCouponsPage() {
     isActive: true
   });
   const [createLoading, setCreateLoading] = useState(false);
+  const [createError, setCreateError] = useState(null);
 
   const loadCoupons = async () => {
     try {
       setLoading(true);
       setError(null);
       const res = await adminService.getCoupons({ search: search.trim() || undefined });
-      setCoupons(res.coupons || res || []);
+      const list = res?.coupons || res?.data?.coupons || (Array.isArray(res) ? res : []);
+      setCoupons(list);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to load coupons');
     } finally {
@@ -69,6 +71,7 @@ export function AdminCouponsPage() {
     e.preventDefault();
     try {
       setCreateLoading(true);
+      setCreateError(null);
       const payload = {
         code: createData.code.trim().toUpperCase(),
         description: createData.description.trim(),
@@ -98,9 +101,10 @@ export function AdminCouponsPage() {
         usageLimitPerUser: 1,
         isActive: true
       });
+      setCreateError(null);
       loadCoupons();
     } catch (err) {
-      alert(err.response?.data?.message || 'Failed to create coupon');
+      setCreateError(err.response?.data?.message || err.message || 'Failed to create coupon');
     } finally {
       setCreateLoading(false);
     }
@@ -277,6 +281,12 @@ export function AdminCouponsPage() {
                 Cancel
               </button>
             </div>
+
+            {createError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 font-medium">
+                {createError}
+              </div>
+            )}
 
             <form onSubmit={handleCreateSubmit} className="space-y-3">
               <div className="grid grid-cols-2 gap-3">

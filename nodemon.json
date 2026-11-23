@@ -1,0 +1,15 @@
+{
+  "watch": ["backend/src"],
+  "ext": "js,mjs,json",
+  "ignore": [
+    "backend/tests/*",
+    "backend/node_modules/*",
+    "backend/public/*",
+    "frontend/*"
+  ],
+  "exec": "node backend/src/server.js",
+  "delay": 500,
+  "env": {
+    "NODE_ENV": "development"
+  }
+}

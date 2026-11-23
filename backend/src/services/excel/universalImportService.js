@@ -337,7 +337,22 @@ export const universalImportService = {
     }
 
     if (job.status === 'processing') {
-      throw ApiError.badRequest('This import job is currently being processed.');
+      return {
+        jobId: job._id,
+        module: job.module,
+        status: 'processing',
+        importMode: job.importMode,
+        totalRows: job.totalRows,
+        createdCount: job.createdCount,
+        updatedCount: job.updatedCount,
+        skippedCount: job.skippedCount,
+        imagesUploaded: job.imagesUploaded || 0,
+        imagesSkipped: job.imagesSkipped || 0,
+        progressCurrent: job.progressCurrent || 0,
+        progressTotal: job.progressTotal || job.totalRows,
+        progressStep: job.progressStep || 'Processing import...',
+        summary: 'This import job is currently being processed in the background.'
+      };
     }
 
     const moduleDef = MODULE_DEFINITIONS[job.module];
@@ -421,6 +436,7 @@ export const universalImportService = {
             );
 
             const rowUploadedAssets = [];
+            const imagesToUpload = [];
 
             for (let imgIdx = 0; imgIdx < folderImages.length; imgIdx++) {
               const img = folderImages[imgIdx];
@@ -431,27 +447,47 @@ export const universalImportService = {
                 continue;
               }
 
-              // Sanitized storage key: products/<SKU>/<position>-<hash>.<ext>
-              const storageKey = generateStorageKey(sku, imgIdx + 1, img.contentHash, img.ext);
+              imagesToUpload.push({ img, imgIdx });
+            }
 
-              // Upload to media storage (Cloudinary or local storage fallback)
-              const uploadRes = await uploadFileToCloudinary(
-                img.buffer,
-                storageKey,
-                `products/${sku}`
+            // Upload images concurrently for this SKU
+            if (imagesToUpload.length > 0) {
+              job.progressStep = `Uploading ${imagesToUpload.length} image${imagesToUpload.length > 1 ? 's' : ''} for SKU ${sku} (${i + 1}/${items.length})...`;
+              job.progressCurrent = i;
+              job.imagesUploaded = imagesUploaded;
+              job.imagesSkipped = imagesSkipped;
+              await job.save();
+
+              const uploadResults = await Promise.all(
+                imagesToUpload.map(async ({ img, imgIdx }) => {
+                  const storageKey = generateStorageKey(sku, imgIdx + 1, img.contentHash, img.ext);
+                  const uploadRes = await uploadFileToCloudinary(
+                    img.buffer,
+                    storageKey,
+                    `products/${sku}`
+                  );
+                  return { uploadRes, img, imgIdx };
+                })
               );
 
-              newlyUploadedUrls.push(uploadRes);
-              imagesUploaded++;
+              for (const { uploadRes, img, imgIdx } of uploadResults) {
+                newlyUploadedUrls.push(uploadRes);
+                imagesUploaded++;
+                rowUploadedAssets.push({
+                  url: uploadRes.url,
+                  publicId: uploadRes.publicId,
+                  alt: img.filename,
+                  isPrimary: img.isMain,
+                  order: imgIdx,
+                  contentHash: img.contentHash
+                });
+              }
+              rowUploadedAssets.sort((a, b) => a.order - b.order);
 
-              rowUploadedAssets.push({
-                url: uploadRes.url,
-                publicId: uploadRes.publicId,
-                alt: img.filename,
-                isPrimary: img.isMain,
-                order: imgIdx,
-                contentHash: img.contentHash
-              });
+              job.progressStep = `Attached ${rowUploadedAssets.length} image${rowUploadedAssets.length > 1 ? 's' : ''} to ${sku} (${i + 1}/${items.length}) • ${imagesUploaded} images uploaded`;
+              job.imagesUploaded = imagesUploaded;
+              job.imagesSkipped = imagesSkipped;
+              await job.save();
             }
 
             // Merge newly uploaded images with existing images or Excel Image URLs
@@ -542,12 +578,12 @@ export const universalImportService = {
         });
       }
 
-      // Progress reporting
+      // Real-time progress reporting (updated on every product)
       job.progressCurrent = i + 1;
-      job.progressStep = `Processed record ${i + 1} of ${items.length}`;
-      if ((i + 1) % 10 === 0 || i === items.length - 1) {
-        await job.save();
-      }
+      job.progressStep = `Processed ${item.data?.sku || `Row ${i + 1}`} (${i + 1}/${items.length}) • ${imagesUploaded} images uploaded`;
+      job.imagesUploaded = imagesUploaded;
+      job.imagesSkipped = imagesSkipped;
+      await job.save();
     }
 
     // Clean up temporary staged ZIP file on disk

@@ -11,6 +11,7 @@ vi.mock('../src/services/bulkImportService', () => ({
     downloadTemplate: vi.fn().mockResolvedValue(),
     validateUpload: vi.fn(),
     executeImport: vi.fn(),
+    getJobStatus: vi.fn().mockResolvedValue(null),
     exportModule: vi.fn().mockResolvedValue(),
     downloadReport: vi.fn().mockResolvedValue()
   }

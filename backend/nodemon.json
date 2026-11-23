@@ -1,0 +1,18 @@
+{
+  "watch": [
+    "src"
+  ],
+  "ext": "js,mjs,json",
+  "ignore": [
+    "tests/*",
+    "node_modules/*",
+    "public/*",
+    "*.test.js",
+    "*.spec.js"
+  ],
+  "exec": "node src/server.js",
+  "delay": 500,
+  "env": {
+    "NODE_ENV": "development"
+  }
+}

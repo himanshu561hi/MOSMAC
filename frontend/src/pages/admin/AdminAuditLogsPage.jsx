@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { adminService } from '@/services/adminService';
 import { formatDate } from '@/utils/formatters';
+import Pagination from '@/components/common/Pagination';
 
 export function AdminAuditLogsPage() {
   const [logs, setLogs] = useState([]);
@@ -195,28 +196,16 @@ export function AdminAuditLogsPage() {
         </div>
 
         {/* Pagination Controls */}
-        <div className="p-4 border-t border-gray-200 flex items-center justify-between text-xs text-gray-500">
+        <div className="p-4 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-500">
           <div>
             Showing {logs.length} of {pagination.total} audit entries (Page {pagination.page} of {pagination.pages})
           </div>
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              disabled={pagination.page <= 1}
-              onClick={() => loadLogs(pagination.page - 1)}
-              className="p-1.5 rounded border border-gray-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              disabled={pagination.page >= pagination.pages}
-              onClick={() => loadLogs(pagination.page + 1)}
-              className="p-1.5 rounded border border-gray-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
+          <Pagination
+            totalPages={pagination.pages}
+            value={pagination.page}
+            onChange={(newPage) => loadLogs(newPage)}
+            size="sm"
+          />
         </div>
       </div>
 

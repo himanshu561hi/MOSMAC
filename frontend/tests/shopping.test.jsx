@@ -243,6 +243,59 @@ describe('Phase 5 — Shopping Features (Cart, Wishlist & Promotions) Frontend T
       expect(screen.getByRole('button', { name: /Proceed to Checkout/i })).toBeInTheDocument();
     });
 
+    it('safely renders backend warning objects and unavailable items without crashing', () => {
+      const mockItemsWithUnavailable = [
+        {
+          _id: 'cart-item-1',
+          productId: 'prod-1',
+          sku: 'WATCH-0101',
+          title: 'Unavailable Product',
+          slug: '',
+          imageUrl: '',
+          quantity: 2,
+          unitPrice: 99900,
+          addedPrice: 99900,
+          mrp: 99900,
+          itemTotal: 0,
+          isAvailable: false,
+          reason: 'Product is unpublished or archived'
+        }
+      ];
+
+      renderWithProviders(<CartPage />, {
+        preloadedState: {
+          cart: {
+            items: mockItemsWithUnavailable,
+            itemCount: 1,
+            distinctItemCount: 1,
+            subtotal: 0,
+            discountAmount: 0,
+            shippingFee: 4900,
+            grandTotal: 4900,
+            freeShippingThreshold: 99900,
+            freeShippingEligible: false,
+            amountNeededForFreeShipping: 99900,
+            appliedCoupon: null,
+            warnings: [
+              {
+                sku: 'WATCH-0101',
+                type: 'PRODUCT_UNAVAILABLE',
+                message: "Product 'WATCH-0101' is no longer available and was excluded from calculations"
+              }
+            ],
+            isLoading: false,
+            isMutating: false,
+            error: null
+          }
+        }
+      });
+
+      expect(screen.getByText("Product 'WATCH-0101' is no longer available and was excluded from calculations")).toBeInTheDocument();
+      expect(screen.getByText('Product is unpublished or archived')).toBeInTheDocument();
+      const checkoutBtn = screen.getByRole('button', { name: /Proceed to Checkout/i });
+      expect(checkoutBtn).toBeDisabled();
+    });
+
     it('renders enabled Proceed to Checkout action button for active cart', () => {
       const mockItems = [
         {

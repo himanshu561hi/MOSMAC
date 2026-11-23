@@ -21,6 +21,7 @@ import {
 import { storefrontService } from '@/services/storefrontService';
 import { addToCart } from '@/store/slices/cartSlice';
 import { addToWishlist, removeFromWishlist } from '@/store/slices/wishlistSlice';
+import { setAuthModalOpen, setPendingAction, addToast } from '@/store/slices/uiSlice';
 import ProductCard from '@/components/product/ProductCard';
 import Button from '@/components/common/Button';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
@@ -88,6 +89,7 @@ export function ProductDetailPage() {
 
   const handleAddToCart = async () => {
     if (!product || !selectedVariant) return;
+
     setIsAddingToCart(true);
     setCartErrorNotice('');
     try {
@@ -99,9 +101,12 @@ export function ProductDetailPage() {
         })
       ).unwrap();
       setCartSuccessNotice(true);
+      dispatch(addToast({ type: 'success', message: `Added '${product.title}' to your bag!` }));
       setTimeout(() => setCartSuccessNotice(false), 4000);
     } catch (err) {
-      setCartErrorNotice(err || 'Failed to add item to bag');
+      const msg = typeof err === 'string' ? err : (err?.message || 'Failed to add item to bag');
+      setCartErrorNotice(msg);
+      dispatch(addToast({ type: 'error', message: msg }));
     } finally {
       setIsAddingToCart(false);
     }
@@ -109,27 +114,61 @@ export function ProductDetailPage() {
 
   const handleBuyNow = async () => {
     if (!product || !selectedVariant) return;
-    setIsAddingToCart(true);
-    setCartErrorNotice('');
-    try {
-      await dispatch(
-        addToCart({
+    if (!isAuthenticated) {
+      try {
+        await dispatch(
+          addToCart({
+            productId: product._id,
+            sku: selectedVariant.sku,
+            quantity
+          })
+        ).unwrap();
+      } catch (err) {
+        console.warn('Could not preemptively add to bag for buy now:', err);
+      }
+      dispatch(
+        setPendingAction({
+          type: 'checkout',
+          redirectTo: '/checkout'
+        })
+      );
+      dispatch(setAuthModalOpen(true));
+      return;
+    }
+
+    // Direct 1-Click checkout for this specific item without mixing with or altering cart
+    navigate('/checkout', {
+      state: {
+        buyNowItem: {
           productId: product._id,
           sku: selectedVariant.sku,
-          quantity
-        })
-      ).unwrap();
-      navigate('/cart');
-    } catch (err) {
-      setCartErrorNotice(err || 'Failed to proceed to cart');
-      setIsAddingToCart(false);
-    }
+          quantity,
+          product,
+          variant: selectedVariant
+        }
+      }
+    });
   };
 
   const handleToggleWishlist = () => {
     if (!product) return;
+    if (!isAuthenticated) {
+      dispatch(
+        setPendingAction({
+          type: 'wishlist',
+          payload: {
+            productId: product._id,
+            sku: selectedVariant?.sku || ''
+          }
+        })
+      );
+      dispatch(setAuthModalOpen(true));
+      return;
+    }
+
     if (isInWishlist) {
       dispatch(removeFromWishlist(product._id));
+      dispatch(addToast({ type: 'info', message: 'Removed from your Wishlist' }));
     } else {
       dispatch(
         addToWishlist({
@@ -137,6 +176,7 @@ export function ProductDetailPage() {
           sku: selectedVariant?.sku || ''
         })
       );
+      dispatch(addToast({ type: 'success', message: 'Added to your Wishlist!' }));
     }
   };
 
@@ -176,7 +216,8 @@ export function ProductDetailPage() {
               images: prod.images,
               brandId: prod.brandId,
               badges: prod.badges,
-              ratings: prod.ratings
+              ratings: prod.ratings,
+              variants: prod.variants
             },
             ...filtered
           ].slice(0, 8);

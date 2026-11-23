@@ -12,6 +12,14 @@ const refreshSessionSchema = new mongoose.Schema(
       type: String,
       required: true
     },
+    previousTokenHash: {
+      type: String,
+      default: null
+    },
+    previousTokenRotatedAt: {
+      type: Date,
+      default: null
+    },
     userAgent: {
       type: String,
       default: 'Unknown'

@@ -8,6 +8,7 @@ export function FilterSidebar({
   brands = [],
   selectedCategory,
   onCategorySelect,
+  showCategoryFilter = true,
   selectedBrands = [],
   onBrandToggle,
   priceRange = { min: '', max: '' },
@@ -26,6 +27,41 @@ export function FilterSidebar({
 }) {
   const [categoryAttrs, setCategoryAttrs] = useState([]);
   const [collapsedSections, setCollapsedSections] = useState({});
+
+  // Group categories into Main Departments (e.g. Face, Eyes, Lips, Tools & Brushes, Kits & Sets) and subcategories
+  const { mainDepartments, subcategoriesByParent } = React.useMemo(() => {
+    if (!categories || categories.length === 0) {
+      return { mainDepartments: [], subcategoriesByParent: {} };
+    }
+
+    // Find root categories (parentId === null or ancestors empty)
+    const roots = categories.filter((c) => !c.parentId);
+    // If there is a single catalog root like 'Makeup', the main departments are its direct children!
+    let departments = [];
+    if (roots.length === 1 && categories.some((c) => c.parentId === roots[0]._id)) {
+      departments = categories.filter((c) => c.parentId === roots[0]._id);
+    } else if (roots.length > 1) {
+      departments = roots;
+    } else {
+      departments = categories.filter((c) => !c.parentId || (c.ancestors && c.ancestors.length <= 1));
+    }
+
+    const deptIds = new Set(departments.map((d) => d._id?.toString()));
+
+    const subMap = {};
+    categories.forEach((cat) => {
+      const pId = cat.parentId?.toString();
+      if (pId && deptIds.has(pId)) {
+        if (!subMap[pId]) subMap[pId] = [];
+        subMap[pId].push(cat);
+      }
+    });
+
+    return {
+      mainDepartments: departments.length > 0 ? departments : categories,
+      subcategoriesByParent: subMap
+    };
+  }, [categories]);
 
   // Fetch dynamic attributes when selectedCategory changes
   useEffect(() => {
@@ -58,7 +94,7 @@ export function FilterSidebar({
   };
 
   const hasActiveFilters =
-    Boolean(selectedCategory) ||
+    (showCategoryFilter && Boolean(selectedCategory)) ||
     selectedBrands.length > 0 ||
     Boolean(priceRange.min) ||
     Boolean(priceRange.max) ||
@@ -101,52 +137,87 @@ export function FilterSidebar({
       </div>
 
       {/* 1. Category Navigation Filter */}
-      <div className="space-y-2">
-        <button
-          type="button"
-          onClick={() => toggleSection('categories')}
-          className="w-full flex items-center justify-between text-xs font-bold uppercase tracking-wider text-gray-900"
-        >
-          <span>Categories</span>
-          {collapsedSections.categories ? (
-            <ChevronRight className="w-4 h-4 text-gray-400" />
-          ) : (
-            <ChevronDown className="w-4 h-4 text-gray-400" />
+      {showCategoryFilter && (
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={() => toggleSection('categories')}
+            className="w-full flex items-center justify-between text-xs font-bold uppercase tracking-wider text-gray-900"
+          >
+            <span>Categories</span>
+            {collapsedSections.categories ? (
+              <ChevronRight className="w-4 h-4 text-gray-400" />
+            ) : (
+              <ChevronDown className="w-4 h-4 text-gray-400" />
+            )}
+          </button>
+
+          {!collapsedSections.categories && (
+            <div className="space-y-1 pt-1 max-h-56 overflow-y-auto text-xs">
+              <button
+                type="button"
+                onClick={() => onCategorySelect(null)}
+                className={`w-full text-left py-1.5 px-2.5 rounded-lg transition-colors flex items-center justify-between ${
+                  !selectedCategory ? 'bg-emerald-50 text-emerald-900 font-bold' : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                <span>All Categories</span>
+                {!selectedCategory && <Check className="w-3.5 h-3.5 text-emerald-600" />}
+              </button>
+
+              {mainDepartments.map((dept) => {
+                const isDeptSelected = selectedCategory?.slug === dept.slug || selectedCategory?._id === dept._id;
+                const subs = subcategoriesByParent[dept._id?.toString()] || [];
+                const hasSelectedSub = subs.some((s) => s.slug === selectedCategory?.slug || s._id === selectedCategory?._id);
+                const isExpanded = isDeptSelected || hasSelectedSub;
+
+                return (
+                  <div key={dept._id} className="space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => onCategorySelect(isDeptSelected ? null : dept)}
+                      className={`w-full text-left py-1.5 px-2.5 rounded-lg transition-colors flex items-center justify-between ${
+                        isDeptSelected
+                          ? 'bg-emerald-50 text-emerald-900 font-bold'
+                          : hasSelectedSub
+                          ? 'text-emerald-800 font-semibold bg-emerald-50/50'
+                          : 'text-gray-700 hover:bg-gray-50 font-medium'
+                      }`}
+                    >
+                      <span className="truncate">{dept.name}</span>
+                      {isDeptSelected && <Check className="w-3.5 h-3.5 text-emerald-600" />}
+                    </button>
+
+                    {/* Nested subcategories when department is selected or active */}
+                    {isExpanded && subs.length > 0 && (
+                      <div className="pl-3.5 ml-2 border-l-2 border-emerald-100 space-y-1 pt-0.5 pb-1">
+                        {subs.map((sub) => {
+                          const isSubSelected = selectedCategory?.slug === sub.slug || selectedCategory?._id === sub._id;
+                          return (
+                            <button
+                              key={sub._id}
+                              type="button"
+                              onClick={() => onCategorySelect(sub)}
+                              className={`w-full text-left py-1 px-2 rounded-md transition-colors text-[11px] flex items-center justify-between ${
+                                isSubSelected
+                                  ? 'bg-emerald-100/70 text-emerald-950 font-bold'
+                                  : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                              }`}
+                            >
+                              <span className="truncate">{sub.name}</span>
+                              {isSubSelected && <Check className="w-3 h-3 text-emerald-600" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           )}
-        </button>
-
-        {!collapsedSections.categories && (
-          <div className="space-y-1 pt-1 max-h-56 overflow-y-auto text-xs">
-            <button
-              type="button"
-              onClick={() => onCategorySelect(null)}
-              className={`w-full text-left py-1.5 px-2.5 rounded-lg transition-colors flex items-center justify-between ${
-                !selectedCategory ? 'bg-emerald-50 text-emerald-900 font-bold' : 'text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              <span>All Categories</span>
-              {!selectedCategory && <Check className="w-3.5 h-3.5 text-emerald-600" />}
-            </button>
-
-            {categories.map((cat) => {
-              const isSelected = selectedCategory?.slug === cat.slug;
-              return (
-                <button
-                  key={cat._id}
-                  type="button"
-                  onClick={() => onCategorySelect(cat)}
-                  className={`w-full text-left py-1.5 px-2.5 rounded-lg transition-colors flex items-center justify-between ${
-                    isSelected ? 'bg-emerald-50 text-emerald-900 font-bold' : 'text-gray-600 hover:bg-gray-50'
-                  }`}
-                >
-                  <span className="truncate">{cat.name}</span>
-                  {isSelected && <Check className="w-3.5 h-3.5 text-emerald-600" />}
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* 2. Brand Filters */}
       {brands.length > 0 && (

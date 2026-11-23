@@ -21,6 +21,7 @@ const envSchema = z.object({
   CORS_ORIGIN: z.string().default('http://localhost:5173,http://127.0.0.1:5173'),
   RATE_LIMIT_STORE: z.enum(['memory', 'mongo', 'redis']).default('memory'),
   COOKIE_DOMAIN: z.string().optional(),
+  COOKIE_SAME_SITE: z.enum(['lax', 'strict', 'none']).optional().default('none'),
   RAZORPAY_KEY_ID: z.string().optional(),
   RAZORPAY_KEY_SECRET: z.string().optional(),
   RAZORPAY_WEBHOOK_SECRET: z.string().optional(),

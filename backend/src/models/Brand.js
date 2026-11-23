@@ -37,6 +37,36 @@ const brandSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
       index: true
+    },
+    isMosmacLoves: {
+      type: Boolean,
+      default: false,
+      index: true
+    },
+    isTopBrand: {
+      type: Boolean,
+      default: false,
+      index: true
+    },
+    isNewlyAdded: {
+      type: Boolean,
+      default: false,
+      index: true
+    },
+    isFeatured: {
+      type: Boolean,
+      default: false,
+      index: true
+    },
+    isMosmacRed: {
+      type: Boolean,
+      default: false,
+      index: true
+    },
+    isHomegrown: {
+      type: Boolean,
+      default: false,
+      index: true
     }
   },
   {

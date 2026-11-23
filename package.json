@@ -1,0 +1,15 @@
+{
+  "name": "ecom-root",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "build": "npm run build --prefix frontend",
+    "build:frontend": "npm run build --prefix frontend",
+    "build:backend": "npm run build --prefix backend",
+    "dev": "npm run dev --prefix backend",
+    "dev:backend": "npm run dev --prefix backend",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "start": "npm start --prefix backend",
+    "test": "npm test --prefix backend && npm test --prefix frontend"
+  }
+}

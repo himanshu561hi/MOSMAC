@@ -6,7 +6,11 @@ import { formatCurrency } from '@/utils/formatters';
 
 const RECENT_SEARCHES_KEY = 'aurora_recent_searches';
 
-export function SearchBar({ className = '', onSearchSubmitted }) {
+export function SearchBar({
+  className = '',
+  placeholder = 'Search for products, categories, brands...',
+  onSearchSubmitted
+}) {
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
@@ -121,8 +125,8 @@ export function SearchBar({ className = '', onSearchSubmitted }) {
           }}
           onFocus={() => setIsOpen(true)}
           onKeyDown={handleKeyDown}
-          placeholder="Search for products, categories, brands..."
-          className="w-full pl-10 pr-9 py-2 bg-gray-100 text-sm rounded-full border border-transparent focus:border-emerald-500 focus:bg-white focus:outline-none transition-all text-gray-800 placeholder-gray-400"
+          placeholder={placeholder}
+          className="w-full pl-9 pr-8 py-2 bg-[#F5F5F5] text-xs rounded-full border border-transparent focus:border-gray-300 focus:bg-white focus:outline-none transition-all text-gray-800 placeholder-gray-400"
           autoComplete="off"
         />
         <Search className="absolute left-3.5 top-2.5 w-4 h-4 text-gray-400" />

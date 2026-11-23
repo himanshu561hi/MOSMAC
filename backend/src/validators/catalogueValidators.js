@@ -36,7 +36,13 @@ export const createBrandSchema = z.object({
     logoUrl: z.string().optional().default(''),
     description: z.string().max(1000).trim().optional().default(''),
     website: z.string().trim().optional().default(''),
-    isActive: z.boolean().optional().default(true)
+    isActive: z.boolean().optional().default(true),
+    isMosmacLoves: z.boolean().optional().default(false),
+    isTopBrand: z.boolean().optional().default(false),
+    isNewlyAdded: z.boolean().optional().default(false),
+    isFeatured: z.boolean().optional().default(false),
+    isMosmacRed: z.boolean().optional().default(false),
+    isHomegrown: z.boolean().optional().default(false)
   }).strict()
 });
 
@@ -47,7 +53,13 @@ export const updateBrandSchema = z.object({
     logoUrl: z.string().optional(),
     description: z.string().max(1000).trim().optional(),
     website: z.string().trim().optional(),
-    isActive: z.boolean().optional()
+    isActive: z.boolean().optional(),
+    isMosmacLoves: z.boolean().optional(),
+    isTopBrand: z.boolean().optional(),
+    isNewlyAdded: z.boolean().optional(),
+    isFeatured: z.boolean().optional(),
+    isMosmacRed: z.boolean().optional(),
+    isHomegrown: z.boolean().optional()
   }).strict()
 });
 
@@ -98,6 +110,7 @@ const variantInputSchema = z.object({
   stockQuantity: z.number().int().min(0, 'Stock cannot be negative').default(0),
   lowStockThreshold: z.number().int().min(0).optional().default(5),
   barcode: z.string().trim().optional().default(''),
+  weight: z.coerce.number().min(0, 'Weight cannot be negative').optional().default(0),
   isActive: z.boolean().optional().default(true),
   status: z.string().optional()
 }).transform((data) => {
@@ -144,6 +157,7 @@ export const createProductSchema = z.object({
     hasVariants: z.boolean().optional().default(false),
     images: z.array(productImageInputSchema).optional().default([]),
     attributes: z.array(productAttributeInputSchema).optional().default([]),
+    weight: z.coerce.number().min(0, 'Weight cannot be negative').optional().default(0),
     variants: z.array(variantInputSchema).min(1, 'At least one variant or SKU configuration is required'),
     seo: z.object({
       metaTitle: z.string().optional().default(''),
@@ -166,6 +180,7 @@ export const updateProductSchema = z.object({
     hasVariants: z.boolean().optional(),
     images: z.array(productImageInputSchema).optional(),
     attributes: z.array(productAttributeInputSchema).optional(),
+    weight: z.coerce.number().min(0, 'Weight cannot be negative').optional(),
     variants: z.array(variantInputSchema).min(1).optional(),
     seo: z.object({
       metaTitle: z.string().optional(),

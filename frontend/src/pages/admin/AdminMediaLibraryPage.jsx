@@ -10,7 +10,8 @@ import {
   AlertCircle,
   Loader2,
   ExternalLink,
-  Image as ImageIcon
+  Image as ImageIcon,
+  UploadCloud
 } from 'lucide-react';
 
 export function AdminMediaLibraryPage() {
@@ -63,6 +64,24 @@ export function AdminMediaLibraryPage() {
     navigator.clipboard.writeText(url);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const handleMediaFileUpload = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    try {
+      setActionLoading(true);
+      setError(null);
+      await cmsService.uploadMediaFiles(files, newAsset.folder);
+      setSuccessMsg(`${files.length} asset(s) uploaded to Cloudinary successfully`);
+      setUploadModalOpen(false);
+      loadAssets();
+    } catch (err) {
+      setError(err.message || 'Failed to upload image files to Cloudinary');
+    } finally {
+      setActionLoading(false);
+      e.target.value = '';
+    }
   };
 
   const handleRecordAsset = async (e) => {
@@ -246,6 +265,30 @@ export function AdminMediaLibraryPage() {
             <div className="flex items-center justify-between border-b pb-3">
               <h3 className="text-lg font-bold text-gray-900">Add Media Asset to Registry</h3>
               <button onClick={() => setUploadModalOpen(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+
+            {/* Direct File Upload */}
+            <div className="border-2 border-dashed border-cyan-300 rounded-2xl p-4 text-center bg-cyan-50/40 hover:bg-cyan-50 transition-colors">
+              <input
+                type="file"
+                id="media-modal-file-input"
+                multiple
+                accept="image/jpeg,image/png,image/webp,image/avif"
+                onChange={handleMediaFileUpload}
+                className="hidden"
+                disabled={actionLoading}
+              />
+              <label htmlFor="media-modal-file-input" className="cursor-pointer block space-y-1">
+                <UploadCloud className="w-8 h-8 text-cyan-600 mx-auto" />
+                <span className="text-sm font-bold text-gray-900 block">Upload files to Cloudinary</span>
+                <span className="text-xs text-gray-500 block">Select one or multiple images (PNG, JPG, WEBP, AVIF)</span>
+              </label>
+            </div>
+
+            <div className="relative flex py-1 items-center">
+              <div className="flex-grow border-t border-gray-200"></div>
+              <span className="flex-shrink mx-3 text-xs text-gray-400 font-medium">Or manually record URL</span>
+              <div className="flex-grow border-t border-gray-200"></div>
             </div>
 
             <form onSubmit={handleRecordAsset} className="space-y-4">

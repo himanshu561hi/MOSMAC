@@ -33,6 +33,21 @@ export const cmsService = {
     return res.data?.settings || res.data;
   },
 
+  async getWhatsNewData() {
+    const res = await apiClient.get('/content/whats-new');
+    return res.data;
+  },
+
+  async getAdminWhatsNewConfig() {
+    const res = await apiClient.get('/admin/cms/whats-new');
+    return res.data?.config || res.data;
+  },
+
+  async updateAdminWhatsNewConfig(config) {
+    const res = await apiClient.patch('/admin/cms/whats-new', { config });
+    return res.data?.config || res.data;
+  },
+
   // ==========================================
   // ADMIN CMS: BANNERS
   // ==========================================
@@ -181,6 +196,21 @@ export const cmsService = {
   // ==========================================
   // MEDIA LIBRARY & CLOUDINARY REGISTRY
   // ==========================================
+
+  async uploadMediaFiles(files, folder = 'ecommerce/products') {
+    const formData = new FormData();
+    formData.append('folder', folder);
+    const fileList = Array.isArray(files) ? files : Array.from(files);
+    fileList.forEach((file) => {
+      formData.append('images', file);
+    });
+    const res = await apiClient.post('/media/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    return res.data?.images || [];
+  },
 
   async listMediaAssets(params = {}) {
     const query = new URLSearchParams(params).toString();

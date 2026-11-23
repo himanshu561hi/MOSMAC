@@ -7,7 +7,7 @@ import { useDispatch } from 'react-redux';
 import { setCredentials } from '@/store/slices/authSlice';
 import { fetchCart, mergeGuestCart } from '@/store/slices/cartSlice';
 import { fetchWishlist, mergeGuestWishlist } from '@/store/slices/wishlistSlice';
-import { clearGuestId } from '@/services/apiClient';
+import { getGuestId, clearGuestId } from '@/services/apiClient';
 import { authService } from './authService';
 import Button from '@/components/common/Button';
 import Input from '@/components/common/Input';
@@ -45,19 +45,21 @@ export function LoginPage() {
   const onSubmit = async (values) => {
     setServerError('');
     try {
-      const data = await authService.login(values);
+      const guestId = getGuestId();
+      const data = await authService.login({ ...values, guestId });
       dispatch(setCredentials({ user: data.user, accessToken: data.accessToken }));
 
       // Merge guest cart & wishlist if guestId was active
-      const guestId = typeof window !== 'undefined' ? localStorage.getItem('aurora_guest_id') : null;
       if (guestId) {
-        dispatch(mergeGuestCart(guestId));
-        dispatch(mergeGuestWishlist(guestId));
-        clearGuestId();
-      } else {
-        dispatch(fetchCart());
-        dispatch(fetchWishlist());
+        try {
+          await dispatch(mergeGuestCart(guestId)).unwrap();
+          await dispatch(mergeGuestWishlist(guestId)).unwrap();
+        } catch (mergeErr) {
+          console.warn('Guest cart merge notice:', mergeErr);
+        }
       }
+      await dispatch(fetchCart()).unwrap();
+      dispatch(fetchWishlist());
 
       if (redirectUrl === '/' && data.user.role !== 'customer') {
         navigate('/admin', { replace: true });

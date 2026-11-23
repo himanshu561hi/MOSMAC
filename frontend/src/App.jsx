@@ -6,6 +6,7 @@ import { setCredentials, setAuthLoading } from '@/store/slices/authSlice';
 import authService from '@/features/auth/authService';
 import AppRoutes from '@/routes/AppRoutes';
 import ErrorBoundary from '@/components/common/ErrorBoundary';
+import ToastContainer from '@/components/common/ToastContainer';
 
 function AuthInitializer({ children }) {
   const dispatch = useDispatch();
@@ -48,6 +49,7 @@ export function App() {
         <ErrorBoundary variant="global">
           <AuthInitializer>
             <AppRoutes />
+            <ToastContainer />
           </AuthInitializer>
         </ErrorBoundary>
       </BrowserRouter>
