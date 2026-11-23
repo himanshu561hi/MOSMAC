@@ -222,7 +222,7 @@ export function StorefrontLayout() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50/50">
+    <div className="min-h-screen flex flex-col bg-gray-50/50 overflow-x-hidden">
       {/* Top Utility Bar */}
       <div className="bg-[#FAF9F8] border-b border-gray-100 text-[11px] text-gray-500 font-medium">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-7 flex items-center justify-between">
@@ -247,21 +247,21 @@ export function StorefrontLayout() {
 
       {/* Main Header (Row 1) */}
       <header className="sticky top-0 z-40 bg-white border-b border-gray-100 shadow-2xs backdrop-blur-md bg-white/95">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2 sm:gap-4">
           {/* Left: Mobile Toggle + Logo + Welcome/Login */}
-          <div className="flex items-center gap-3 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-4 shrink-0">
             <button
               type="button"
               onClick={() => dispatch(toggleMobileMenu())}
-              className="md:hidden p-2 text-gray-600 hover:text-gray-900 rounded-lg hover:bg-gray-100"
+              className="md:hidden p-1.5 text-gray-600 hover:text-gray-900 rounded-lg hover:bg-gray-100"
               aria-label="Open menu"
             >
-              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+              {mobileMenuOpen ? <X className="w-5 h-5 sm:w-6 sm:h-6" /> : <Menu className="w-5 h-5 sm:w-6 sm:h-6" />}
             </button>
 
             {/* Logo */}
             <Link to="/" onMouseEnter={handleCloseBrandsMenu} className="flex items-center">
-              <span className="font-black text-2xl sm:text-[26px] tracking-tight text-slate-950 uppercase font-sans select-none flex items-center">
+              <span className="font-black text-xl sm:text-[26px] tracking-tight text-slate-950 uppercase font-sans select-none flex items-center">
                 MOSMAC<span className="w-1.5 h-1.5 rounded-full bg-[#E03A30] ml-0.5 inline-block" />
               </span>
             </Link>
@@ -301,9 +301,9 @@ export function StorefrontLayout() {
           </div>
 
           {/* Right: Search + Delivering to + Bag + Account */}
-          <div className="flex items-center gap-3 sm:gap-4 ml-auto">
+          <div className="flex items-center gap-1.5 sm:gap-4 ml-auto min-w-0">
             {/* Interactive Search Bar */}
-            <div className="w-44 sm:w-56 lg:w-64">
+            <div className="w-28 xs:w-36 sm:w-56 lg:w-64 min-w-0">
               <SearchBar className="w-full" placeholder="Search" />
             </div>
 

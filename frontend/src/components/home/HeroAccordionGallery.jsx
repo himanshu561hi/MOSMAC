@@ -10,6 +10,7 @@ import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Sparkles } from 'lucide-react';
 import AccordionGallery from '@/components/ui/AccordionGallery';
+import MobileHeroSlider from '@/components/home/MobileHeroSlider';
 
 export const FLAGSHIP_DEFAULTS = [
   {
@@ -136,26 +137,33 @@ export function HeroAccordionGallery({ cmsBanners = [], featuredProducts = [] })
         </Link>
       </div>
 
-      {/* React Bits AccordionGallery Component */}
-      <AccordionGallery
-        items={items}
-        defaultIndex={0}
-        height={480}
-        radius={20}
-        gap={12}
-        accentColor="#E03A30"
-        overlayColor="#05030a"
-        textColor="#ffffff"
-        trigger="hover"
-        duration={0.55}
-        ease="power2.out"
-        parallax={0}
-        tilt={0}
-        stagger={0.05}
-        showLabels={true}
-        grayscale={false}
-        className="shadow-xl"
-      />
+      {/* Desktop: React Bits AccordionGallery Component */}
+      <div className="hidden md:block">
+        <AccordionGallery
+          items={items}
+          defaultIndex={0}
+          height={480}
+          radius={20}
+          gap={12}
+          accentColor="#E03A30"
+          overlayColor="#05030a"
+          textColor="#ffffff"
+          trigger="hover"
+          duration={0.55}
+          ease="power2.out"
+          parallax={0}
+          tilt={0}
+          stagger={0.05}
+          showLabels={true}
+          grayscale={false}
+          className="shadow-xl"
+        />
+      </div>
+
+      {/* Mobile (Phones): Touch Swipeable Hero Slidebar */}
+      <div className="block md:hidden">
+        <MobileHeroSlider items={items} />
+      </div>
     </section>
   );
 }

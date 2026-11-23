@@ -189,7 +189,7 @@ export function ProductCard({ product, className = '' }) {
       </Link>
 
       {/* Details Area */}
-      <div className="p-4 flex-1 flex flex-col justify-between space-y-2">
+      <div className="p-3 sm:p-4 flex-1 flex flex-col justify-between space-y-2">
         <div className="space-y-1">
           {/* Brand */}
           <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider truncate">

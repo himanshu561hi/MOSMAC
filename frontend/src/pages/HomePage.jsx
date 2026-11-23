@@ -168,14 +168,14 @@ export function HomePage() {
             </Link>
           </div>
 
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4 pt-1">
+          <div className="flex sm:grid sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3 sm:gap-4 overflow-x-auto scrollbar-none pb-2 pt-1 -mx-4 px-4 sm:mx-0 sm:px-0">
             {categoriesToDisplay.slice(0, 8).map((cat) => (
               <Link
                 key={cat._id}
                 to={`/category/${cat.slug}`}
-                className="group flex flex-col items-center text-center gap-2"
+                className="group shrink-0 flex flex-col items-center text-center gap-2"
               >
-                <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gray-50 border border-gray-200 p-1 overflow-hidden group-hover:border-gray-900 group-hover:shadow-md transition-all flex items-center justify-center">
+                <div className="w-18 h-18 sm:w-24 sm:h-24 rounded-full bg-gray-50 border border-gray-200 p-1 overflow-hidden group-hover:border-gray-900 group-hover:shadow-md transition-all flex items-center justify-center">
                   {cat.imageUrl ? (
                     <img
                       src={cat.imageUrl}
@@ -188,7 +188,7 @@ export function HomePage() {
                     </div>
                   )}
                 </div>
-                <span className="text-xs font-medium text-gray-800 group-hover:text-black transition-colors line-clamp-1 max-w-[90px]">
+                <span className="text-xs font-medium text-gray-800 group-hover:text-black transition-colors line-clamp-1 max-w-[80px] sm:max-w-[90px]">
                   {cat.name}
                 </span>
               </Link>
@@ -303,14 +303,14 @@ export function HomePage() {
                   {displayedFeaturedProducts.map((product) => (
                     <div
                       key={product._id}
-                      className="shrink-0 snap-start w-[calc(50%-8px)] sm:w-[calc(33.333%-11px)] lg:w-[calc(25%-15px)]"
+                      className="shrink-0 snap-start w-[165px] xs:w-[190px] sm:w-[calc(33.333%-11px)] lg:w-[calc(25%-15px)]"
                     >
                       <ProductCard product={product} />
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-5">
                   {displayedFeaturedProducts.map((product) => (
                     <ProductCard key={product._id} product={product} />
                   ))}
@@ -355,7 +355,7 @@ export function HomePage() {
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
                   {section.products.slice(0, section.maxProducts || 8).map((product) => (
                     <ProductCard key={product._id} product={product} />
                   ))}
@@ -373,12 +373,12 @@ export function HomePage() {
             <p className="text-xs text-gray-500 font-medium">Official verified brand partners & authorized flagships</p>
           </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 pt-2">
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center justify-center gap-3 sm:gap-6 pt-2">
             {data.brands.map((brand) => (
               <Link
                 key={brand._id}
                 to={`/products?brand=${brand.slug}`}
-                className="group relative flex flex-col items-center justify-center h-20 sm:h-24 w-44 sm:w-52 p-3 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:border-[#E03A30] hover:shadow-md transition-all duration-200 transform hover:-translate-y-0.5"
+                className="group relative flex flex-col items-center justify-center h-20 sm:h-24 w-full sm:w-52 p-3 bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:border-[#E03A30] hover:shadow-md transition-all duration-200 transform hover:-translate-y-0.5"
                 title={`Shop ${brand.name}`}
               >
                 <div className="h-10 w-full flex items-center justify-center">
