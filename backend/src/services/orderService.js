@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import mongoose from 'mongoose';
 import { Order, ORDER_STATUSES, PAYMENT_STATUSES } from '../models/Order.js';
+import { User } from '../models/User.js';
 import { Payment } from '../models/Payment.js';
 import { WebhookEvent } from '../models/WebhookEvent.js';
 import { Coupon } from '../models/Coupon.js';
@@ -154,12 +155,14 @@ export const orderService = {
       appliedCoupon: quote.appliedCoupon,
       paymentMethod,
       paymentStatus: 'pending',
-      orderStatus: isCod ? 'confirmed' : 'placed',
+      orderStatus: 'pending',
       statusHistory: [
         {
-          status: isCod ? 'confirmed' : 'placed',
+          status: 'pending',
           timestamp: new Date(),
-          note: isCod ? 'Order placed with Cash on Delivery' : 'Order initialized pending Razorpay payment',
+          note: isCod
+            ? 'Order placed with Cash on Delivery (Awaiting Admin Confirmation)'
+            : 'Order initialized pending Razorpay payment',
           changedBy: 'system'
         }
       ],
@@ -263,14 +266,14 @@ export const orderService = {
 
     // Update order status & payment details
     order.paymentStatus = 'captured';
-    order.orderStatus = 'confirmed';
+    order.orderStatus = 'pending'; // Stays pending until Admin reviews and confirms
     order.paymentDetails.razorpayPaymentId = razorpayPaymentId;
     order.paymentDetails.razorpaySignature = razorpaySignature;
     order.expiresAt = null;
     order.statusHistory.push({
-      status: 'confirmed',
+      status: 'pending',
       timestamp: new Date(),
-      note: `Payment verified and captured via Razorpay (${razorpayPaymentId})`,
+      note: `Payment verified and captured via Razorpay (${razorpayPaymentId}). Order awaiting admin confirmation.`,
       changedBy: 'payment_gateway'
     });
 
@@ -484,7 +487,19 @@ export const orderService = {
    * Lists customer order history with pagination
    */
   async listCustomerOrders(userId, { page = 1, limit = 10, status = '' } = {}) {
-    const query = { userId };
+    let query = { userId };
+    try {
+      const user = await User.findById(userId).select('email phone').lean();
+      const orConditions = [{ userId }];
+      if (user?.email) {
+        orConditions.push({ 'customer.email': user.email.toLowerCase() });
+      }
+      if (user?.phone) {
+        orConditions.push({ 'customer.phone': user.phone });
+      }
+      query = { $or: orConditions };
+    } catch (_) {}
+
     if (status && ORDER_STATUSES.includes(status)) {
       query.orderStatus = status;
     }

@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { orderService } from '../services/orderService.js';
 import { Cart } from '../models/Cart.js';
+import { User } from '../models/User.js';
 import { sendSuccess } from '../utils/responseFormatter.js';
 import {
   createOrderSchema,
@@ -55,8 +56,18 @@ export const orderController = {
 
       const validated = createOrderSchema.parse(body);
 
+      let effectiveUserId = userId;
+      if (!effectiveUserId && validated.customer?.email) {
+        try {
+          const matchedUser = await User.findOne({ email: validated.customer.email.toLowerCase() }).select('_id').lean();
+          if (matchedUser) {
+            effectiveUserId = matchedUser._id;
+          }
+        } catch (_) {}
+      }
+
       const result = await orderService.createOrder({
-        userId,
+        userId: effectiveUserId,
         guestId,
         customer: validated.customer,
         items: validated.items,
@@ -70,7 +81,7 @@ export const orderController = {
       return sendSuccess(
         res,
         201,
-        validated.paymentMethod === 'cod' ? 'Order confirmed with Cash on Delivery' : 'Order initialized. Proceed with payment.',
+        'Order placed successfully. Awaiting admin confirmation.',
         result
       );
     } catch (err) {

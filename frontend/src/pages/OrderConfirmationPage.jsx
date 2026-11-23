@@ -19,6 +19,7 @@ import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { fetchOrderDetail } from '@/store/slices/orderSlice';
 import { fetchCart } from '@/store/slices/cartSlice';
+import OrderDocumentModal from '@/components/orders/OrderDocumentModal';
 
 export function OrderConfirmationPage() {
   const { orderNumber } = useParams();
@@ -27,6 +28,7 @@ export function OrderConfirmationPage() {
 
   const { currentOrder, loadingDetail, detailError } = useSelector((state) => state.orders);
   const [copied, setCopied] = useState(false);
+  const [docModalOpen, setDocModalOpen] = useState(false);
 
   // Use passed state order if available, else fetch from backend
   const order = location.state?.order || currentOrder;
@@ -79,14 +81,20 @@ export function OrderConfirmationPage() {
         <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-4 ring-8 ring-emerald-50">
           <CheckCircle2 className="w-10 h-10 sm:w-12 sm:h-12" />
         </div>
-        <span className="text-xs font-bold uppercase tracking-widest text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
-          Order Confirmed
+        <span className={`text-xs font-bold uppercase tracking-widest px-3 py-1 rounded-full border ${
+          order?.orderStatus === 'pending'
+            ? 'text-amber-700 bg-amber-50 border-amber-200'
+            : 'text-emerald-700 bg-emerald-50 border-emerald-200'
+        }`}>
+          {order?.orderStatus === 'pending' ? 'Order Placed (Pending Confirmation)' : 'Order Confirmed'}
         </span>
         <h1 className="text-2xl sm:text-4xl font-black text-gray-900 tracking-tight mt-3">
           Thank you for your order!
         </h1>
         <p className="text-sm sm:text-base text-gray-500 mt-2 max-w-lg mx-auto">
-          We have received your order and our fulfilment center is preparing it for dispatch.
+          {order?.orderStatus === 'pending'
+            ? 'We have received your order. Our team will verify and confirm it shortly before fulfillment.'
+            : 'We have received your order and our fulfilment center is preparing it for dispatch.'}
         </p>
 
         {/* Order Number Pill */}
@@ -234,7 +242,16 @@ export function OrderConfirmationPage() {
               Continue Shopping
             </Button>
           </Link>
-          <div className="flex gap-3 w-full sm:w-auto">
+          <div className="flex flex-wrap gap-3 w-full sm:w-auto">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setDocModalOpen(true)}
+              className="w-full sm:w-auto flex items-center justify-center gap-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-200"
+            >
+              <FileText className="w-4 h-4 text-emerald-600" />
+              <span>Tax Invoice</span>
+            </Button>
             <Link to="/track-order" className="w-full sm:w-auto">
               <Button variant="secondary" className="w-full sm:w-auto flex items-center justify-center gap-1.5">
                 <Truck className="w-4 h-4" />
@@ -243,13 +260,21 @@ export function OrderConfirmationPage() {
             </Link>
             <Link to="/account/orders" className="w-full sm:w-auto">
               <Button variant="primary" className="w-full sm:w-auto flex items-center justify-center gap-1.5">
-                <span>View Order History</span>
+                <span>View My Orders</span>
                 <ArrowRight className="w-4 h-4" />
               </Button>
             </Link>
           </div>
         </div>
       </div>
+
+      {/* GST Tax Invoice & Packing Slip Modal */}
+      <OrderDocumentModal
+        isOpen={docModalOpen}
+        onClose={() => setDocModalOpen(false)}
+        order={order}
+        initialDocType="invoice"
+      />
     </div>
   );
 }

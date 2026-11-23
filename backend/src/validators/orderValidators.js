@@ -122,6 +122,7 @@ export const cancelOrderSchema = z.object({
 
 export const adminUpdateOrderStatusSchema = z.object({
   newStatus: z.enum([
+    'pending',
     'placed',
     'confirmed',
     'processing',

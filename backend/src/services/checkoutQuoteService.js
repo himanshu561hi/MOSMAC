@@ -78,6 +78,7 @@ export const checkoutQuoteService = {
       subtotal += itemTotal;
 
       const primaryImg = product.images?.find((img) => img.isPrimary)?.url || product.images?.[0]?.url || '';
+      const itemWeight = Number(variant.weight || product.packageWeight || product.weight || 0);
 
       quotedItems.push({
         productId: product._id,
@@ -89,6 +90,8 @@ export const checkoutQuoteService = {
         unitPrice,
         mrp,
         itemTotal,
+        weight: itemWeight,
+        hsnCode: product.hsnCode || '3304',
         categoryId: product.categoryId
       });
     }

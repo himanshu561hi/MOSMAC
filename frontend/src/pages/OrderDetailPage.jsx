@@ -14,15 +14,19 @@ import {
   AlertTriangle,
   ExternalLink,
   ShieldAlert,
-  FileText
+  FileText,
+  PackageCheck,
+  Printer
 } from 'lucide-react';
 import Button from '@/components/common/Button';
 import Alert from '@/components/common/Alert';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { fetchOrderDetail, cancelCustomerOrder } from '@/store/slices/orderSlice';
+import OrderDocumentModal from '@/components/orders/OrderDocumentModal';
 
 const TIMELINE_STEPS = [
+  { key: 'pending', label: 'Order Received', desc: 'Awaiting admin verification' },
   { key: 'confirmed', label: 'Order Confirmed', desc: 'Order details verified' },
   { key: 'processing', label: 'Fulfilment Processing', desc: 'Packing at warehouse' },
   { key: 'shipped', label: 'Shipped', desc: 'Handed over to courier' },
@@ -40,6 +44,8 @@ export function OrderDetailPage() {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState('Found a better price elsewhere');
   const [actionSuccess, setActionSuccess] = useState('');
+  const [docModalOpen, setDocModalOpen] = useState(false);
+  const [docType, setDocType] = useState('invoice');
 
   useEffect(() => {
     if (orderNumber) {
@@ -91,14 +97,18 @@ export function OrderDetailPage() {
   const getCurrentStepIndex = () => {
     if (isCancelled) return -1;
     switch (currentOrder.orderStatus) {
-      case 'confirmed':
+      case 'pending':
+      case 'placed':
         return 0;
-      case 'processing':
+      case 'confirmed':
         return 1;
-      case 'shipped':
+      case 'processing':
         return 2;
-      case 'delivered':
+      case 'shipped':
+      case 'out_for_delivery':
         return 3;
+      case 'delivered':
+        return 4;
       default:
         return 0;
     }
@@ -138,16 +148,43 @@ export function OrderDetailPage() {
           </p>
         </div>
 
-        {canCancel && (
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
           <Button
-            variant="danger"
+            variant="outline"
             size="sm"
-            onClick={() => setShowCancelModal(true)}
-            className="self-start sm:self-auto"
+            onClick={() => {
+              setDocType('invoice');
+              setDocModalOpen(true);
+            }}
+            className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-200"
           >
-            Cancel Order
+            <FileText className="w-3.5 h-3.5" />
+            <span>Tax Invoice</span>
           </Button>
-        )}
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setDocType('packing_slip');
+              setDocModalOpen(true);
+            }}
+            className="flex items-center gap-1.5 text-xs text-blue-700 bg-blue-50 hover:bg-blue-100 border-blue-200"
+          >
+            <PackageCheck className="w-3.5 h-3.5" />
+            <span>Packing Slip</span>
+          </Button>
+
+          {canCancel && (
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={() => setShowCancelModal(true)}
+            >
+              Cancel Order
+            </Button>
+          )}
+        </div>
       </div>
 
       {actionSuccess && (
@@ -462,6 +499,14 @@ export function OrderDetailPage() {
           </div>
         </div>
       )}
+
+      {/* GST Tax Invoice & Packing Slip Modal */}
+      <OrderDocumentModal
+        isOpen={docModalOpen}
+        onClose={() => setDocModalOpen(false)}
+        order={currentOrder}
+        initialDocType={docType}
+      />
     </div>
   );
 }

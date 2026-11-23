@@ -22,7 +22,9 @@ import {
   Layers,
   Sparkles,
   RefreshCw,
-  Loader2
+  Loader2,
+  FileText,
+  PackageCheck
 } from 'lucide-react';
 import Button from '@/components/common/Button';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
@@ -30,6 +32,7 @@ import Pagination from '@/components/common/Pagination';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { fetchAdminOrders, updateAdminOrderStatus } from '@/store/slices/orderSlice';
 import { BulkActionButtons } from '@/components/admin/BulkActionButtons';
+import OrderDocumentModal from '@/components/orders/OrderDocumentModal';
 
 const PIPELINE_STAGES = [
   {
@@ -147,6 +150,9 @@ export function AdminOrdersPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [transitioningOrderId, setTransitioningOrderId] = useState(null);
   const [actionSuccessMessage, setActionSuccessMessage] = useState('');
+  const [docModalOpen, setDocModalOpen] = useState(false);
+  const [selectedDocOrder, setSelectedDocOrder] = useState(null);
+  const [docType, setDocType] = useState('invoice');
 
   const loadOrders = (page = 1) => {
     dispatch(
@@ -622,13 +628,39 @@ export function AdminOrdersPage() {
                                 </button>
                               )}
 
-                              <Link
-                                to={`/admin/orders/${ord._id}`}
-                                className="inline-flex items-center justify-center py-1.5 px-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors"
-                                title="Full Details"
-                              >
-                                <Eye className="w-3.5 h-3.5" />
-                              </Link>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedDocOrder(ord);
+                                    setDocType('invoice');
+                                    setDocModalOpen(true);
+                                  }}
+                                  className="inline-flex items-center justify-center p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-lg transition-colors border border-emerald-200"
+                                  title="Print GST Tax Invoice"
+                                >
+                                  <FileText className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedDocOrder(ord);
+                                    setDocType('packing_slip');
+                                    setDocModalOpen(true);
+                                  }}
+                                  className="inline-flex items-center justify-center p-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold rounded-lg transition-colors border border-blue-200"
+                                  title="Print Packing Slip & Proof"
+                                >
+                                  <PackageCheck className="w-3.5 h-3.5" />
+                                </button>
+                                <Link
+                                  to={`/admin/orders/${ord._id}`}
+                                  className="inline-flex items-center justify-center p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors"
+                                  title="Full Order Details"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                </Link>
+                              </div>
                             </div>
                           </div>
                         );
@@ -693,12 +725,38 @@ export function AdminOrdersPage() {
                         {getOrderStatusBadge(ord.orderStatus)}
                       </td>
                       <td className="py-3 px-4 text-right">
-                        <Link to={`/admin/orders/${ord._id}`}>
-                          <Button variant="secondary" size="xs" className="flex items-center gap-1 inline-flex">
-                            <Eye className="w-3.5 h-3.5 text-slate-600" />
-                            <span>Manage</span>
-                          </Button>
-                        </Link>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedDocOrder(ord);
+                              setDocType('invoice');
+                              setDocModalOpen(true);
+                            }}
+                            className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg transition-colors border border-emerald-200"
+                            title="Print GST Tax Invoice"
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedDocOrder(ord);
+                              setDocType('packing_slip');
+                              setDocModalOpen(true);
+                            }}
+                            className="p-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors border border-blue-200"
+                            title="Print Packing Slip & Proof"
+                          >
+                            <PackageCheck className="w-3.5 h-3.5" />
+                          </button>
+                          <Link to={`/admin/orders/${ord._id}`}>
+                            <Button variant="secondary" size="xs" className="flex items-center gap-1 inline-flex">
+                              <Eye className="w-3.5 h-3.5 text-slate-600" />
+                              <span>Manage</span>
+                            </Button>
+                          </Link>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -727,6 +785,14 @@ export function AdminOrdersPage() {
           )}
         </div>
       )}
+
+      {/* GST Tax Invoice & Packing Slip Modal */}
+      <OrderDocumentModal
+        isOpen={docModalOpen}
+        onClose={() => setDocModalOpen(false)}
+        order={selectedDocOrder}
+        initialDocType={docType}
+      />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 
 export const ORDER_STATUSES = [
+  'pending',
   'placed',
   'confirmed',
   'processing',
@@ -68,6 +69,14 @@ const orderItemSnapshotSchema = new mongoose.Schema(
       type: Number,
       required: true,
       min: 0 // unitPrice * quantity in integer paise
+    },
+    weight: {
+      type: Number,
+      default: 0 // package weight in grams
+    },
+    hsnCode: {
+      type: String,
+      default: '3304' // Indian GST HSN for Cosmetics / Personal Care
     }
   },
   { _id: true }

@@ -107,6 +107,14 @@ export function AppRoutes() {
           }
         />
         <Route
+          path="/orders"
+          element={
+            <ProtectedRoute>
+              <MyOrdersPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/account/orders"
           element={
             <ProtectedRoute>

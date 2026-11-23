@@ -6,12 +6,13 @@ export const orderService = {
     const params = new URLSearchParams({ page: String(page), limit: String(limit) });
     if (status) params.append('status', status);
     const response = await apiClient.get(`/orders?${params.toString()}`);
-    const orders = Array.isArray(response?.data)
-      ? response.data
-      : (Array.isArray(response?.data?.orders)
-        ? response.data.orders
-        : (Array.isArray(response) ? response : []));
-    const pagination = response?.meta || response?.data?.pagination || response?.pagination || {
+    const resData = response?.data;
+    const orders = Array.isArray(resData?.data)
+      ? resData.data
+      : (Array.isArray(resData?.orders)
+        ? resData.orders
+        : (Array.isArray(resData) ? resData : []));
+    const pagination = resData?.meta || resData?.pagination || response?.meta || {
       page: Number(page),
       limit: Number(limit),
       total: orders.length,

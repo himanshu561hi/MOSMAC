@@ -158,11 +158,18 @@ export const orderSlice = createSlice({
           state.page = 1;
           state.totalPages = 1;
         } else {
-          state.orders = payload?.orders || (Array.isArray(payload?.data) ? payload.data : []);
-          const meta = payload?.pagination || payload?.meta || {};
-          state.total = meta.total ?? state.orders.length;
+          const list = Array.isArray(payload?.orders)
+            ? payload.orders
+            : (Array.isArray(payload?.data)
+              ? payload.data
+              : (Array.isArray(payload?.data?.orders)
+                ? payload.data.orders
+                : []));
+          state.orders = list;
+          const meta = payload?.pagination || payload?.meta || payload?.data?.meta || {};
+          state.total = meta.total ?? list.length;
           state.page = meta.page ?? 1;
-          state.totalPages = meta.totalPages ?? meta.pages ?? 1;
+          state.totalPages = meta.totalPages ?? meta.pages ?? (Math.ceil(state.total / (meta.limit || 10)) || 1);
         }
       })
       .addCase(fetchCustomerOrders.rejected, (state, action) => {

@@ -23,16 +23,19 @@ import {
   Clock,
   XCircle,
   CreditCard,
-  Banknote
+  Banknote,
+  FileText
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { fetchCustomerOrders } from '@/store/slices/orderSlice';
+import OrderDocumentModal from '@/components/orders/OrderDocumentModal';
 
 const STATUS_TABS = [
   { id: '', label: 'All Orders' },
+  { id: 'pending', label: 'Pending' },
   { id: 'confirmed', label: 'Confirmed' },
   { id: 'shipped', label: 'Shipped' },
   { id: 'delivered', label: 'Delivered' },
@@ -72,6 +75,9 @@ export function AccountPage({ defaultTab }) {
   // Orders tab state
   const [selectedStatus, setSelectedStatus] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [docModalOpen, setDocModalOpen] = useState(false);
+  const [selectedDocOrder, setSelectedDocOrder] = useState(null);
+  const [docType, setDocType] = useState('invoice');
 
   const handleTabChange = (tab) => {
     setActiveTabState(tab);
@@ -136,10 +142,17 @@ export function AccountPage({ defaultTab }) {
 
   const getStatusBadge = (status) => {
     switch (status) {
+      case 'pending':
+      case 'placed':
+        return (
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200">
+            <Clock className="w-3 h-3" /> Pending Confirmation
+          </span>
+        );
       case 'confirmed':
         return (
           <span className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-full border border-blue-200">
-            <Clock className="w-3 h-3" /> Confirmed
+            <CheckCircle2 className="w-3 h-3" /> Confirmed
           </span>
         );
       case 'processing':
@@ -422,6 +435,19 @@ export function AccountPage({ defaultTab }) {
 
                     <div className="flex items-center gap-2">
                       {getStatusBadge(order.orderStatus)}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedDocOrder(order);
+                          setDocType('invoice');
+                          setDocModalOpen(true);
+                        }}
+                        className="inline-flex items-center gap-1 text-xs py-1 px-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg font-semibold border border-emerald-200 transition-colors"
+                        title="Download GST Tax Invoice"
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                        <span>Invoice</span>
+                      </button>
                       <Link to={`/account/orders/${order.orderNumber}`}>
                         <Button variant="outline" size="sm" className="text-xs py-1 px-2.5">
                           <span>Details</span>
@@ -456,9 +482,9 @@ export function AccountPage({ defaultTab }) {
                   </div>
 
                   <div className="pt-3 border-t border-gray-100 flex items-center justify-between text-xs">
-                    <span className="text-gray-500">Total Paid</span>
+                    <span className="text-gray-500">Total Amount</span>
                     <span className="text-sm font-extrabold text-gray-900">
-                      {formatCurrency(order.pricing?.total || 0)}
+                      {formatCurrency(order.pricing?.grandTotal || order.grandTotal || order.pricing?.total || 0)}
                     </span>
                   </div>
                 </div>
@@ -480,6 +506,14 @@ export function AccountPage({ defaultTab }) {
           )}
         </div>
       )}
+
+      {/* GST Tax Invoice & Packing Slip Modal */}
+      <OrderDocumentModal
+        isOpen={docModalOpen}
+        onClose={() => setDocModalOpen(false)}
+        order={selectedDocOrder}
+        initialDocType={docType}
+      />
     </div>
   );
 }

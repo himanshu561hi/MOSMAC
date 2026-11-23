@@ -15,7 +15,8 @@ import {
   Banknote,
   FileText,
   DollarSign,
-  ShieldAlert
+  ShieldAlert,
+  PackageCheck
 } from 'lucide-react';
 import Button from '@/components/common/Button';
 import Input from '@/components/common/Input';
@@ -27,6 +28,7 @@ import {
   updateAdminOrderStatus,
   processAdminRefund
 } from '@/store/slices/orderSlice';
+import OrderDocumentModal from '@/components/orders/OrderDocumentModal';
 
 // Strict State Transition Map matching backend orderService.js
 const ALLOWED_TRANSITIONS = {
@@ -68,6 +70,8 @@ export function AdminOrderDetailPage() {
   const [refundReason, setRefundReason] = useState('Customer requested order return');
   const [refundSuccess, setRefundSuccess] = useState('');
   const [refundError, setRefundError] = useState('');
+  const [docModalOpen, setDocModalOpen] = useState(false);
+  const [docType, setDocType] = useState('invoice');
 
   useEffect(() => {
     if (id) {
@@ -197,20 +201,48 @@ export function AdminOrderDetailPage() {
           </p>
         </div>
 
-        {canRefund && maxRefundable > 0 && (
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
           <Button
-            variant="secondary"
+            variant="outline"
             size="sm"
             onClick={() => {
-              setRefundAmountRupees((maxRefundable / 100).toFixed(2));
-              setShowRefundModal(true);
+              setDocType('invoice');
+              setDocModalOpen(true);
             }}
-            className="flex items-center gap-1.5 self-start sm:self-auto"
+            className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-200"
           >
-            <RotateCcw className="w-4 h-4 text-purple-600" />
-            <span>Process Refund</span>
+            <FileText className="w-4 h-4 text-emerald-600" />
+            <span>Print Tax Invoice</span>
           </Button>
-        )}
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setDocType('packing_slip');
+              setDocModalOpen(true);
+            }}
+            className="flex items-center gap-1.5 text-xs text-blue-700 bg-blue-50 hover:bg-blue-100 border-blue-200"
+          >
+            <PackageCheck className="w-4 h-4 text-blue-600" />
+            <span>Packing Slip & Proof</span>
+          </Button>
+
+          {canRefund && maxRefundable > 0 && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setRefundAmountRupees((maxRefundable / 100).toFixed(2));
+                setShowRefundModal(true);
+              }}
+              className="flex items-center gap-1.5"
+            >
+              <RotateCcw className="w-4 h-4 text-purple-600" />
+              <span>Process Refund</span>
+            </Button>
+          )}
+        </div>
       </div>
 
       {statusSuccess && (
@@ -513,6 +545,14 @@ export function AdminOrderDetailPage() {
           </div>
         </div>
       )}
+
+      {/* GST Tax Invoice & Packing Slip Modal */}
+      <OrderDocumentModal
+        isOpen={docModalOpen}
+        onClose={() => setDocModalOpen(false)}
+        order={order}
+        initialDocType={docType}
+      />
     </div>
   );
 }
