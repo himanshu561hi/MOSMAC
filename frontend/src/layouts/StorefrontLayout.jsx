@@ -103,7 +103,13 @@ export function StorefrontLayout() {
     } catch (e) { }
     return DEFAULT_NAV_CATEGORIES;
   });
-  const [brands, setBrands] = useState([]);
+  const [brands, setBrands] = useState(() => {
+    try {
+      const cached = sessionStorage.getItem('mosmac_nav_brands');
+      if (cached) return JSON.parse(cached);
+    } catch (e) { }
+    return [];
+  });
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [hoveredCategory, setHoveredCategory] = useState(null);
   const [brandsMenuOpen, setBrandsMenuOpen] = useState(false);
@@ -206,7 +212,12 @@ export function StorefrontLayout() {
             sessionStorage.setItem('mosmac_nav_cats', JSON.stringify(cats.slice(0, 10)));
           } catch (e) { }
         }
-        setBrands(brs || []);
+        if (Array.isArray(brs)) {
+          setBrands(brs);
+          try {
+            sessionStorage.setItem('mosmac_nav_brands', JSON.stringify(brs));
+          } catch (e) { }
+        }
       } catch (err) {
         console.error('Failed to load navigation data:', err);
       }
@@ -628,27 +639,20 @@ export function StorefrontLayout() {
 
                   {mobileBrandsOpen && (
                     <div className="pl-4 pr-2 py-2 space-y-1 bg-gray-50/80 rounded-xl max-h-60 overflow-y-auto no-scrollbar text-xs">
-                      {(brands.length > 0
-                        ? brands
-                        : [
-                          { name: 'MOSMAC', slug: 'mosmac' },
-                          { name: 'IMAGIC', slug: 'imagic' },
-                          { name: 'Lakmé', slug: 'lakme' },
-                          { name: "L'Oréal", slug: 'loreal' },
-                          { name: 'Maybelline', slug: 'maybelline' },
-                          { name: 'Sugar Cosmetics', slug: 'sugar' },
-                          { name: 'MAC', slug: 'mac' }
-                        ]
-                      ).map((b) => (
-                        <Link
-                          key={b.slug}
-                          to={`/products?brand=${encodeURIComponent(b.slug)}`}
-                          onClick={() => dispatch(setMobileMenuOpen(false))}
-                          className="block py-1.5 px-2 text-gray-700 hover:text-[#E04038] hover:bg-white rounded font-medium"
-                        >
-                          {b.name}
-                        </Link>
-                      ))}
+                      {brands.length > 0 ? (
+                        brands.map((b) => (
+                          <Link
+                            key={b._id || b.slug}
+                            to={`/products?brand=${encodeURIComponent(b.slug)}`}
+                            onClick={() => dispatch(setMobileMenuOpen(false))}
+                            className="block py-1.5 px-2 text-gray-700 hover:text-[#E04038] hover:bg-white rounded font-medium"
+                          >
+                            {b.name}
+                          </Link>
+                        ))
+                      ) : (
+                        <span className="block py-1.5 px-2 text-gray-400 italic">No brands available</span>
+                      )}
                     </div>
                   )}
                 </div>
