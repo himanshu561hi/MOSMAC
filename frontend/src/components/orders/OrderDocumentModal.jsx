@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Printer,
   Download,
@@ -12,6 +12,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/utils/formatters';
+import { printElementDirectly } from '@/utils/printDocument';
 
 // Number to Indian English words converter for GST invoice compliance
 function numberToWordsINR(amountInPaise) {
@@ -66,6 +67,19 @@ export function OrderDocumentModal({
   const [activeTab, setActiveTab] = useState(initialDocType); // 'invoice' | 'packing_slip'
   const printRef = useRef(null);
 
+  useEffect(() => {
+    setActiveTab(initialDocType);
+  }, [initialDocType, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen || !order) return null;
 
   const items = order.items || [];
@@ -97,24 +111,31 @@ export function OrderDocumentModal({
   }, 0);
 
   const totalUnits = items.reduce((sum, i) => sum + (i.quantity || 1), 0);
-
-  const handlePrint = () => {
-    window.print();
-  };
-
   const invoiceNumber = `INV-${(order.orderNumber || '0000').replace(/^ORD-/, '')}`;
   const isCod = order.paymentMethod === 'cod';
 
+  const handlePrint = () => {
+    const docTitle = activeTab === 'invoice'
+      ? `Tax_Invoice_${invoiceNumber}`
+      : `Packing_Slip_${order.orderNumber}`;
+    printElementDirectly('printable-order-document', docTitle);
+  };
+
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 print:p-0 print:bg-white print:static">
-      <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200 w-full max-w-4xl overflow-hidden my-6 print:m-0 print:border-none print:shadow-none">
-        {/* Modal Toolbar - Hidden during print */}
-        <div className="bg-slate-900 text-white px-4 sm:px-6 py-3.5 flex flex-wrap items-center justify-between gap-3 print:hidden">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-[9999] bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 md:p-6 print:p-0 print:bg-white print:static"
+    >
+      <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200 w-full max-w-4xl h-[92vh] max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150 print:h-auto print:max-h-none print:border-none print:shadow-none">
+        {/* Modal Toolbar - ALWAYS pinned at the top */}
+        <div className="shrink-0 bg-slate-900 text-white px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 print:hidden z-10 shadow-md">
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setActiveTab('invoice')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
                 activeTab === 'invoice'
                   ? 'bg-emerald-500 text-slate-950 shadow-xs'
                   : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
@@ -126,7 +147,7 @@ export function OrderDocumentModal({
             <button
               type="button"
               onClick={() => setActiveTab('packing_slip')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
                 activeTab === 'packing_slip'
                   ? 'bg-emerald-500 text-slate-950 shadow-xs'
                   : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
@@ -141,28 +162,30 @@ export function OrderDocumentModal({
             <button
               type="button"
               onClick={handlePrint}
-              className="px-4 py-1.5 rounded-lg text-xs font-bold bg-white text-slate-900 hover:bg-slate-100 flex items-center gap-1.5 shadow-sm transition-transform active:scale-95"
+              className="px-4 py-1.5 rounded-xl text-xs font-black bg-emerald-500 hover:bg-emerald-400 text-slate-950 flex items-center gap-1.5 shadow-sm transition-transform active:scale-95 cursor-pointer"
             >
-              <Printer className="w-3.5 h-3.5 text-emerald-600" />
+              <Printer className="w-4 h-4" />
               <span>Print / Save PDF</span>
             </button>
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+              className="p-1.5 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors cursor-pointer"
+              title="Close Modal (Esc)"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
-        {/* Printable Document Container */}
-        <div ref={printRef} className="p-6 sm:p-10 text-slate-800 font-sans print:p-6" id="printable-order-document">
-          {activeTab === 'invoice' ? (
-            /* =========================================================================
-               1. GST TAX INVOICE
-               ========================================================================= */
-            <div className="space-y-6">
+        {/* Scrollable Document Container */}
+        <div className="flex-1 overflow-y-auto overscroll-contain p-6 sm:p-10 bg-white print:p-0 print:overflow-visible">
+          <div ref={printRef} className="space-y-6 text-slate-800 font-sans" id="printable-order-document">
+            {activeTab === 'invoice' ? (
+              /* =========================================================================
+                 1. GST TAX INVOICE
+                 ========================================================================= */
+              <div className="space-y-6">
               {/* Invoice Header */}
               <div className="border-b-2 border-slate-900 pb-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
@@ -551,6 +574,7 @@ export function OrderDocumentModal({
               </div>
             </div>
           )}
+          </div>
         </div>
       </div>
     </div>

@@ -59,25 +59,33 @@ div[data-netlify-drawer] {
    Print Styles for GST Tax Invoices & Packing Slips
    ========================================================= */
 @media print {
+  html, body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    overflow: visible !important;
+    height: auto !important;
+  }
   body * {
-    visibility: hidden;
+    visibility: hidden !important;
   }
   #printable-order-document,
   #printable-order-document * {
-    visibility: visible;
+    visibility: visible !important;
   }
   #printable-order-document {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    margin: 0;
-    padding: 10mm;
+    position: fixed !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 10mm !important;
     background: #ffffff !important;
-    color: #000000 !important;
+    color: #0f172a !important;
+    box-sizing: border-box !important;
+    z-index: 999999 !important;
   }
   @page {
-    size: A4;
+    size: A4 portrait;
     margin: 10mm;
   }
 }
