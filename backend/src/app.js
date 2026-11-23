@@ -44,7 +44,8 @@ app.use(cors({
       allowedOrigins.includes(origin) ||
       allowedOrigins.includes('*') ||
       /\.netlify\.app$/.test(origin) ||
-      /\.vercel\.app$/.test(origin)
+      /\.vercel\.app$/.test(origin) ||
+      /\.onrender\.com$/.test(origin)
     ) {
       callback(null, true);
     } else {

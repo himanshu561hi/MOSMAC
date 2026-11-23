@@ -3,8 +3,8 @@ import env from './config/env.js';
 import { connectDB, disconnectDB } from './config/database.js';
 import { syncSuperAdminFromEnv } from './services/adminSyncService.js';
 
-const PORT = env.PORT || 5000;
-const HOST = env.HOST || '127.0.0.1';
+const PORT = process.env.PORT || env.PORT || 5000;
+const HOST = process.env.HOST || env.HOST || '0.0.0.0';
 
 async function startServer() {
   try {
