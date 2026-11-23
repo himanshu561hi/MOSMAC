@@ -117,6 +117,21 @@ app.use('/uploads', express.static(path.join(process.cwd(), 'public/uploads')));
 app.get('/sitemap.xml', sitemapController.getSitemapXml);
 app.get('/robots.txt', sitemapController.getRobotsTxt);
 
+// Root entrypoint status
+app.get('/', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'MOSMAC E-Commerce API is running live',
+    version: '1.0.0',
+    environment: env.NODE_ENV,
+    endpoints: {
+      health: '/api/v1/health',
+      products: '/api/v1/products',
+      categories: '/api/v1/categories'
+    }
+  });
+});
+
 // Mount REST API Version 1
 app.use('/api/v1', apiRouter);
 
