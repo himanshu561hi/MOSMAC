@@ -25,9 +25,54 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Hide Netlify Badge & Feedback Drawer immediately -->
+    <style>
+      netlify-drawer,
+      #netlify-drawer,
+      iframe#netlify-drawer,
+      iframe[title*="Netlify" i],
+      iframe[src*="netlify" i],
+      [data-netlify-drawer],
+      [class*="netlify-drawer" i],
+      [class*="netlify-badge" i] {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        z-index: -99999 !important;
+      }
+    </style>
   </head>
   <body class="bg-gray-50 text-gray-900 antialiased font-sans min-h-screen">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+    <script>
+      (function() {
+        function removeNetlifyBadge() {
+          const els = document.querySelectorAll(
+            'netlify-drawer, #netlify-drawer, iframe[title*="Netlify" i], [data-netlify-drawer]'
+          );
+          els.forEach(el => el.remove());
+
+          // Detect any fixed bottom-right widget with "Powered by Netlify"
+          document.querySelectorAll('div, a, button').forEach(el => {
+            const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
+            if (txt.includes('powered by netlify') || txt === 'netlify') {
+              try {
+                const pos = window.getComputedStyle(el).position;
+                if (pos === 'fixed' || pos === 'absolute') {
+                  el.style.setProperty('display', 'none', 'important');
+                  el.remove();
+                }
+              } catch (_) {}
+            }
+          });
+        }
+        window.addEventListener('DOMContentLoaded', removeNetlifyBadge);
+        window.addEventListener('load', removeNetlifyBadge);
+        setInterval(removeNetlifyBadge, 500);
+      })();
+    </script>
   </body>
 </html>
