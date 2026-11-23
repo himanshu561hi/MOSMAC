@@ -2,11 +2,11 @@ import React, { useEffect } from 'react';
 
 const DEFAULT_BASE_URL = typeof window !== 'undefined'
   ? window.location.origin
-  : 'https://aura-storefront.netlify.app';
+  : (import.meta.env.VITE_SITE_URL || 'https://mosmac.netlify.app');
 
-const DEFAULT_STORE_NAME = 'Aura';
-const DEFAULT_TAGLINE = 'Modern Quality General E-Commerce Store';
-const DEFAULT_DESCRIPTION = 'Shop curated electronics, apparel, and lifestyle essentials with pan-India delivery, verified customer reviews, Cash on Delivery, and hassle-free 7-day returns.';
+const DEFAULT_STORE_NAME = import.meta.env.VITE_APP_NAME || 'MOSMAC';
+const DEFAULT_TAGLINE = 'Luxury & Professional Cosmetics & Makeup Store';
+const DEFAULT_DESCRIPTION = 'Shop authentic beauty cosmetics, makeup kits, and skincare essentials with express delivery, cash on delivery, and 100% genuine brand guarantee.';
 const DEFAULT_OG_IMAGE = 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1200&h=630&q=80';
 
 /**

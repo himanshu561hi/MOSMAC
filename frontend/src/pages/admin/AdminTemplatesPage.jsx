@@ -82,8 +82,11 @@ export function AdminTemplatesPage() {
       setEditingTemplate(template);
       setPreviewModalOpen(true);
 
+      const storeName = import.meta.env.VITE_APP_NAME || 'MOSMAC';
+      const siteUrl = import.meta.env.VITE_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : 'https://mosmac.netlify.app');
+
       const sampleVariables = {
-        storeName: 'AURORA Premium',
+        storeName,
         customerName: 'Aditya Roy',
         orderNumber: 'ORD-20261114-8849',
         grandTotal: '₹2,499',
@@ -92,8 +95,8 @@ export function AdminTemplatesPage() {
         courierName: 'BlueDart Express',
         trackingNumber: 'BLUEDART-88291039',
         trackingUrl: 'https://bluedart.com/track',
-        resetUrl: 'https://aurorastore.in/reset-password?token=sample_token',
-        verificationUrl: 'https://aurorastore.in/verify-email?token=sample_token',
+        resetUrl: `${siteUrl}/reset-password?token=sample_token`,
+        verificationUrl: `${siteUrl}/verify-email?token=sample_token`,
         amount: '₹2,499',
         refundAmount: '₹2,499'
       };
