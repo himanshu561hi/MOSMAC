@@ -81,6 +81,28 @@ export function OrderDocumentModal({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
+  // Keep top-level print container synchronized so native Cmd+P prints the active document cleanly
+  useEffect(() => {
+    if (!isOpen) {
+      const container = document.getElementById('mosmac-print-container');
+      if (container) container.innerHTML = '';
+      return;
+    }
+    const timer = setTimeout(() => {
+      const sourceEl = document.getElementById('printable-order-document');
+      let container = document.getElementById('mosmac-print-container');
+      if (!container) {
+        container = document.createElement('div');
+        container.id = 'mosmac-print-container';
+        document.body.appendChild(container);
+      }
+      if (sourceEl) {
+        container.innerHTML = sourceEl.innerHTML;
+      }
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [isOpen, activeTab, order]);
+
   if (!isOpen || !order) return null;
 
   const items = order.items || [];

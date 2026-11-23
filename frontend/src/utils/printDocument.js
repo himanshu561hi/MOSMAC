@@ -3,8 +3,8 @@
  * without browser overflow, modal backdrops, or navbar/sidebar clipping.
  */
 
-function buildDocumentHtml(contentHtml, documentTitle) {
-  // Collect active style links & stylesheets
+export function buildDocumentHtml(contentHtml, documentTitle) {
+  // Collect active style links & stylesheets from the main document
   const headStyles = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
     .map((el) => el.outerHTML)
     .join('\n');
@@ -19,35 +19,66 @@ function buildDocumentHtml(contentHtml, documentTitle) {
     <style>
       @page {
         size: A4 portrait;
-        margin: 12mm 10mm;
+        margin: 6mm 8mm;
       }
       *, *::before, *::after {
-        visibility: visible !important;
-        opacity: 1 !important;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
         box-sizing: border-box !important;
       }
       html, body {
-        background: #ffffff !important;
-        background-color: #ffffff !important;
+        background-color: #f1f5f9;
         color: #0f172a !important;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
         margin: 0 !important;
         padding: 0 !important;
         width: 100% !important;
-        min-height: 100% !important;
-        overflow: visible !important;
       }
-      body * {
-        visibility: visible !important;
+      .action-bar {
+        position: sticky;
+        top: 0;
+        left: 0;
+        right: 0;
+        background: #0f172a;
+        color: #ffffff;
+        padding: 12px 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+        z-index: 1000;
       }
-      .print-page-wrapper {
-        width: 100% !important;
-        max-width: 210mm !important;
-        margin: 0 auto !important;
-        padding: 10mm !important;
-        background: #ffffff !important;
+      .action-btn-print {
+        background: #10b981;
+        color: #022c22;
+        font-weight: 800;
+        font-size: 13px;
+        padding: 8px 18px;
+        border-radius: 10px;
+        border: none;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .action-btn-close {
+        background: #334155;
+        color: #e2e8f0;
+        font-weight: 600;
+        font-size: 13px;
+        padding: 8px 16px;
+        border-radius: 10px;
+        border: none;
+        cursor: pointer;
+      }
+      .page-container {
+        max-width: 210mm;
+        margin: 24px auto;
+        background: #ffffff;
+        padding: 10mm 12mm;
+        box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);
+        border-radius: 12px;
       }
       table {
         width: 100% !important;
@@ -56,23 +87,60 @@ function buildDocumentHtml(contentHtml, documentTitle) {
       tr {
         page-break-inside: avoid !important;
       }
-      .no-print,
-      .print\\:hidden,
-      netlify-drawer,
-      #netlify-drawer,
-      [data-netlify-drawer] {
-        display: none !important;
+      @media print {
+        html, body {
+          background: #ffffff !important;
+          background-color: #ffffff !important;
+        }
+        .action-bar, .no-print, .print\\:hidden {
+          display: none !important;
+        }
+        .page-container {
+          margin: 0 !important;
+          padding: 0 !important;
+          box-shadow: none !important;
+          border-radius: 0 !important;
+          max-width: 100% !important;
+          width: 100% !important;
+        }
       }
     </style>
   </head>
   <body>
-    <div class="print-page-wrapper" id="printable-order-document">
+    <div class="action-bar">
+      <div style="font-weight: 700; font-size: 14px; letter-spacing: -0.01em;">
+        ${documentTitle.replace(/_/g, ' ')}
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <button class="action-btn-print" onclick="window.print()">
+          🖨️ Print / Save as PDF
+        </button>
+        <button class="action-btn-close" onclick="window.close()">
+          ✕ Close
+        </button>
+      </div>
+    </div>
+    <div class="page-container" id="printable-order-document">
       ${contentHtml}
     </div>
+    <script>
+      // Auto-trigger print once page elements settle
+      window.addEventListener('load', () => {
+        setTimeout(() => {
+          try {
+            window.print();
+          } catch (_) {}
+        }, 350);
+      });
+    </script>
   </body>
 </html>`;
 }
 
+/**
+ * Direct native printing via top-level #mosmac-print-container.
+ * Eliminates iframe culling, blank page previews, and cross-origin sandboxing.
+ */
 export function printElementDirectly(elementId, documentTitle = 'MOSMAC Document') {
   const sourceEl = document.getElementById(elementId);
   if (!sourceEl) {
@@ -80,61 +148,48 @@ export function printElementDirectly(elementId, documentTitle = 'MOSMAC Document
     return;
   }
 
-  const contentHtml = sourceEl.innerHTML;
-  const fullHtml = buildDocumentHtml(contentHtml, documentTitle);
-
-  // Remove any stale print iframes
-  const existing = document.getElementById('mosmac-print-frame');
-  if (existing && existing.parentNode) {
-    existing.parentNode.removeChild(existing);
+  // Ensure top-level direct print container exists on body
+  let container = document.getElementById('mosmac-print-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'mosmac-print-container';
+    document.body.appendChild(container);
   }
 
-  // Create an A4-dimensioned off-screen iframe so the browser layout engine
-  // calculates full non-zero dimensions for all text, tables, and colors
-  const iframe = document.createElement('iframe');
-  iframe.id = 'mosmac-print-frame';
-  iframe.setAttribute('title', documentTitle);
-  iframe.style.position = 'fixed';
-  iframe.style.left = '-10000px';
-  iframe.style.top = '0';
-  iframe.style.width = '210mm';
-  iframe.style.height = '297mm';
-  iframe.style.border = '0';
-  iframe.style.opacity = '0';
-  iframe.style.pointerEvents = 'none';
-  iframe.style.zIndex = '-9999';
+  // Populate container with exact document content
+  container.innerHTML = sourceEl.innerHTML;
 
-  document.body.appendChild(iframe);
+  // Temporarily update document title so default PDF filename is exact
+  const originalTitle = document.title;
+  if (documentTitle) {
+    document.title = documentTitle;
+  }
 
-  const doc = iframe.contentWindow || iframe.contentDocument;
-  const iframeDoc = doc.document || doc;
-
-  iframeDoc.open();
-  iframeDoc.write(fullHtml);
-  iframeDoc.close();
-
-  const executePrint = () => {
-    try {
-      iframe.contentWindow.focus();
-      iframe.contentWindow.print();
-    } catch (err) {
-      console.warn('Iframe print error, falling back to window print:', err);
-      window.print();
-    } finally {
-      setTimeout(() => {
-        try {
-          if (iframe.parentNode) {
-            iframe.parentNode.removeChild(iframe);
-          }
-        } catch (_) {}
-      }, 5000);
+  const cleanup = () => {
+    document.title = originalTitle;
+    if (container) {
+      container.innerHTML = '';
     }
+    window.removeEventListener('afterprint', cleanup);
   };
 
-  // Wait 300ms for stylesheets & web fonts to compute inside iframe
-  setTimeout(executePrint, 300);
+  window.addEventListener('afterprint', cleanup, { once: true });
+
+  try {
+    // Trigger native browser print dialog
+    window.print();
+  } catch (err) {
+    console.warn('Native window.print failed, attempting new tab fallback:', err);
+    openDocumentInNewTab(elementId, documentTitle);
+  } finally {
+    // Fallback cleanup in case afterprint event does not fire
+    setTimeout(cleanup, 2500);
+  }
 }
 
+/**
+ * Opens document in a dedicated browser tab with its own Print button & auto-print.
+ */
 export function openDocumentInNewTab(elementId, documentTitle = 'MOSMAC Document') {
   const sourceEl = document.getElementById(elementId);
   if (!sourceEl) return;
@@ -145,16 +200,7 @@ export function openDocumentInNewTab(elementId, documentTitle = 'MOSMAC Document
   const newWin = window.open('', '_blank');
   if (newWin) {
     newWin.document.open();
-    newWin.document.write(`
-      ${fullHtml}
-      <script>
-        window.addEventListener('load', () => {
-          setTimeout(() => {
-            window.print();
-          }, 400);
-        });
-      </script>
-    `);
+    newWin.document.write(fullHtml);
     newWin.document.close();
   }
 }

@@ -58,27 +58,77 @@ div[data-netlify-drawer] {
 /* =========================================================
    Print Styles for GST Tax Invoices & Packing Slips
    ========================================================= */
+#mosmac-print-container {
+  display: none;
+}
+
 @media print {
   *, *::before, *::after {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
+  
   html, body {
     background: #ffffff !important;
+    background-color: #ffffff !important;
     color: #0f172a !important;
     overflow: visible !important;
     height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
-  .print\\:hidden,
+
+  /* When printing, hide all main app elements & Netlify drawers */
+  #root,
+  .print\:hidden,
   netlify-drawer,
   #netlify-drawer,
-  [data-netlify-drawer] {
+  iframe#netlify-drawer,
+  iframe[title*="Netlify" i],
+  iframe[src*="netlify" i],
+  [data-netlify-drawer],
+  [class*="netlify-drawer" i],
+  [class*="netlify-badge" i] {
     display: none !important;
     visibility: hidden !important;
   }
+
+  body > *:not(#mosmac-print-container) {
+    display: none !important;
+  }
+
+  #mosmac-print-container {
+    display: block !important;
+    visibility: visible !important;
+    position: static !important;
+    width: 100% !important;
+    max-width: 210mm !important;
+    margin: 0 auto !important;
+    padding: 6mm 8mm !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    box-sizing: border-box !important;
+  }
+
+  #mosmac-print-container *,
+  #mosmac-print-container *::before,
+  #mosmac-print-container *::after {
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+  }
+
   @page {
     size: A4 portrait;
-    margin: 10mm;
+    margin: 6mm 8mm;
   }
 }
 
