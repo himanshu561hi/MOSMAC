@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Sparkles, ShieldCheck, Truck, RotateCcw, ArrowRight } from 'lucide-react';
 import InfiniteSpiral from '@/components/ui/InfiniteSpiral';
 import { BrandStylizedLogo } from '@/components/layout/BrandsMegaMenu';
@@ -99,17 +99,55 @@ export function BrandHeroShowcase({
     return Array.from(catMap.values());
   }, [products, categories]);
 
-  return (
-    <div className="w-full mb-8">
-      {/* Dark Luxury Brand Showcase Card */}
-      <div className="relative rounded-3xl overflow-hidden bg-[#0A0D14] border border-neutral-800/80 shadow-2xl">
-        {/* Ambient Glow Aura */}
-        <div className="pointer-events-none absolute -top-20 -left-20 w-96 h-96 rounded-full bg-emerald-500/10 blur-3xl" />
-        <div className="pointer-events-none absolute top-1/2 -right-10 -translate-y-1/2 w-[520px] h-[520px] rounded-full bg-[radial-gradient(circle_at_center,rgba(224,58,48,0.22)_0,rgba(124,58,237,0.14)_45%,transparent_70%)] blur-2xl" />
+  // Responsive screen detection for dynamic 3D spiral scaling
+  const [isMobile, setIsMobile] = useState(false);
 
-        <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 items-center min-h-[380px] sm:min-h-[430px]">
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(typeof window !== 'undefined' ? window.innerWidth < 1024 : false);
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Responsive Spiral Parameters: Compact & proportionate on mobile, full majestic 3D on desktop
+  const spiralConfig = useMemo(() => {
+    if (isMobile) {
+      return {
+        radius: 95,
+        cardWidth: 80,
+        cardHeight: 80,
+        verticalSpacing: 38,
+        cardsPerTurn: 6,
+        centerScale: 1.15,
+        edgeBlur: 3,
+        cardRadius: 10
+      };
+    }
+    return {
+      radius: 155,
+      cardWidth: 115,
+      cardHeight: 115,
+      verticalSpacing: 56,
+      cardsPerTurn: 7,
+      centerScale: 1.22,
+      edgeBlur: 5,
+      cardRadius: 14
+    };
+  }, [isMobile]);
+
+  return (
+    <div className="w-full mb-6 sm:mb-8">
+      {/* Dark Luxury Brand Showcase Card */}
+      <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden bg-[#0A0D14] border border-neutral-800/80 shadow-2xl">
+        {/* Ambient Glow Aura */}
+        <div className="pointer-events-none absolute -top-20 -left-20 w-72 sm:w-96 h-72 sm:h-96 rounded-full bg-emerald-500/10 blur-3xl" />
+        <div className="pointer-events-none absolute top-1/2 -right-10 -translate-y-1/2 w-80 sm:w-[520px] h-80 sm:h-[520px] rounded-full bg-[radial-gradient(circle_at_center,rgba(224,58,48,0.22)_0,rgba(124,58,237,0.14)_45%,transparent_70%)] blur-2xl" />
+
+        <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 items-center">
           {/* Left Column: Brand Discovery & Story */}
-          <div className="lg:col-span-6 p-6 sm:p-10 lg:p-12 flex flex-col justify-center space-y-4">
+          <div className="lg:col-span-6 p-4 sm:p-8 lg:p-12 flex flex-col justify-center space-y-3 sm:space-y-4">
             <div className="flex items-center gap-2">
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold tracking-widest uppercase bg-white/10 text-white/90 backdrop-blur-md border border-white/10">
                 <Sparkles className="w-3 h-3 text-amber-300" />
@@ -120,49 +158,40 @@ export function BrandHeroShowcase({
               </span>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-1 sm:space-y-2">
               <div className="flex items-center gap-3">
-                <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight uppercase">
+                <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight uppercase">
                   {brand?.name}
                 </h1>
               </div>
-              <p className="text-neutral-300 text-sm sm:text-base font-light max-w-lg leading-relaxed pt-1">
+              <p className="text-neutral-300 text-xs sm:text-sm lg:text-base font-light max-w-lg leading-relaxed pt-0.5 line-clamp-3 sm:line-clamp-none">
                 {brand?.description ||
                   `Experience authentic ${brand?.name} luxury beauty, dermatologist-tested formulations, and premium cosmetics.`}
               </p>
             </div>
 
             {/* Authenticity Badges */}
-            <div className="pt-2 flex flex-wrap items-center gap-2.5 text-xs text-neutral-300">
-              <div className="flex items-center gap-1.5 bg-neutral-900/80 px-3 py-1.5 rounded-xl border border-neutral-800">
-                <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span className="font-medium">100% Genuine Certified</span>
+            <div className="pt-1 flex flex-wrap items-center gap-1.5 sm:gap-2.5 text-[10px] sm:text-xs text-neutral-300">
+              <div className="flex items-center gap-1.5 bg-neutral-900/80 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg sm:rounded-xl border border-neutral-800">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span className="font-medium whitespace-nowrap">100% Genuine</span>
               </div>
-              <div className="flex items-center gap-1.5 bg-neutral-900/80 px-3 py-1.5 rounded-xl border border-neutral-800">
-                <Truck className="w-4 h-4 text-blue-400 shrink-0" />
-                <span className="font-medium">Express Pan-India Logistics</span>
+              <div className="flex items-center gap-1.5 bg-neutral-900/80 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg sm:rounded-xl border border-neutral-800">
+                <Truck className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                <span className="font-medium whitespace-nowrap">Express Pan-India</span>
               </div>
-              <div className="flex items-center gap-1.5 bg-neutral-900/80 px-3 py-1.5 rounded-xl border border-neutral-800">
-                <Sparkles className="w-4 h-4 text-rose-400 shrink-0" />
-                <span className="font-medium">Dermatologist Tested</span>
+              <div className="flex items-center gap-1.5 bg-neutral-900/80 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg sm:rounded-xl border border-neutral-800">
+                <Sparkles className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                <span className="font-medium whitespace-nowrap">Dermatologist Tested</span>
               </div>
-            </div>
-
-            {/* Dots Pagination indicator matching Tira reference */}
-            <div className="flex items-center gap-1.5 pt-3">
-              <span className="w-6 h-1.5 rounded-full bg-white transition-all shadow-xs" />
-              <span className="w-1.5 h-1.5 rounded-full bg-white/30" />
-              <span className="w-1.5 h-1.5 rounded-full bg-white/30" />
-              <span className="w-1.5 h-1.5 rounded-full bg-white/30" />
-              <span className="w-1.5 h-1.5 rounded-full bg-white/30" />
             </div>
           </div>
 
           {/* Right Column: 3D Infinite Spiral Helix Showcase */}
-          <div className="lg:col-span-6 relative h-[360px] sm:h-[430px] w-full flex items-center justify-center overflow-hidden p-2">
+          <div className="lg:col-span-6 relative h-[210px] sm:h-[300px] lg:h-[430px] w-full flex items-center justify-center overflow-hidden p-2">
             {/* Glowing Backdrop behind Spiral */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="w-64 h-64 sm:w-80 sm:h-80 rounded-full bg-gradient-to-tr from-[#E03A30]/25 via-amber-500/20 to-indigo-600/25 blur-3xl animate-pulse" />
+              <div className="w-44 h-44 sm:w-80 sm:h-80 rounded-full bg-gradient-to-tr from-[#E03A30]/25 via-amber-500/20 to-indigo-600/25 blur-3xl animate-pulse" />
             </div>
 
             {/* InfiniteSpiral Component */}
@@ -171,15 +200,15 @@ export function BrandHeroShowcase({
                 items={spiralItems}
                 speed={0.55}
                 animationMode="all"
-                radius={155}
-                cardWidth={115}
-                cardHeight={115}
-                verticalSpacing={56}
+                radius={spiralConfig.radius}
+                cardWidth={spiralConfig.cardWidth}
+                cardHeight={spiralConfig.cardHeight}
+                verticalSpacing={spiralConfig.verticalSpacing}
                 perspective={1000}
-                cardRadius={14}
-                centerScale={1.22}
-                edgeBlur={5}
-                cardsPerTurn={7}
+                cardRadius={spiralConfig.cardRadius}
+                centerScale={spiralConfig.centerScale}
+                edgeBlur={spiralConfig.edgeBlur}
+                cardsPerTurn={spiralConfig.cardsPerTurn}
                 pauseOnHover={true}
                 imageFit="cover"
               />
@@ -188,17 +217,17 @@ export function BrandHeroShowcase({
         </div>
       </div>
 
-      {/* "Shop By Categories" Filter Section matching Tira reference screenshot */}
+      {/* "Shop By Categories" Filter Section */}
       {categoryPills.length > 0 && (
-        <div className="mt-8 mb-6">
-          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight text-center mb-4">
+        <div className="mt-6 sm:mt-8 mb-6">
+          <h2 className="text-lg sm:text-2xl font-bold text-gray-900 tracking-tight text-center mb-3 sm:mb-4">
             Shop By Categories
           </h2>
-          <div className="flex items-center justify-center flex-wrap gap-2.5 max-w-4xl mx-auto px-2">
+          <div className="flex items-center justify-start sm:justify-center overflow-x-auto scrollbar-none gap-2 sm:gap-2.5 max-w-4xl mx-auto px-2 pb-2">
             <button
               type="button"
               onClick={() => onSelectCategory('')}
-              className={`px-5 py-2.5 rounded-2xl text-xs sm:text-sm font-semibold transition-all cursor-pointer shadow-2xs ${
+              className={`shrink-0 whitespace-nowrap px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-semibold transition-all cursor-pointer shadow-2xs ${
                 !selectedCategory
                   ? 'bg-neutral-900 text-white shadow-md ring-2 ring-neutral-900'
                   : 'bg-white text-neutral-700 hover:bg-neutral-50 border border-neutral-200'
@@ -213,7 +242,7 @@ export function BrandHeroShowcase({
                   key={cat.slug}
                   type="button"
                   onClick={() => onSelectCategory(isSelected ? '' : cat.slug)}
-                  className={`px-5 py-2.5 rounded-2xl text-xs sm:text-sm font-semibold transition-all cursor-pointer shadow-2xs ${
+                  className={`shrink-0 whitespace-nowrap px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-semibold transition-all cursor-pointer shadow-2xs ${
                     isSelected
                       ? 'bg-neutral-900 text-white shadow-md ring-2 ring-neutral-900'
                       : 'bg-white text-neutral-700 hover:bg-neutral-50 border border-neutral-200'
